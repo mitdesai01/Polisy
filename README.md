@@ -1,6 +1,6 @@
 # POLISY
 
-**Politics, Organizations, Leadership, Strategy & Innovation.** A research lab built as code. It links workforce partisanship (VRscores) to open data on AI exposure, AI adoption, migration, state policy and innovation. It keeps every pattern it finds as a graded finding, with the research question it raises and the data that would settle it, and it writes an interactive website of the results.
+**Politics, Organizations, Leadership, Strategy & Innovation.** A research lab built as code. It links workforce partisanship (VRscores) to open data on AI exposure, AI adoption, migration, state policy and innovation. It keeps every pattern it finds as a graded finding, with the research question it raises and the data that would settle it, stress-tests the headline findings, and writes a research report and an interactive lab.
 
 Research theme 1: **Political Ideology × AI × Innovation**.
 
@@ -13,7 +13,7 @@ Research theme 1: **Political Ideology × AI × Innovation**.
 | `lab/docs/TECHNICAL_REPORT.md` | How to run it, what each stage does, the datasets and how they link, the methods, what the first run found, how to extend it |
 | `POLISY_DA/` | The POLISY data pipeline: `polisy_core.py` (finds and reads every input by name and content) and modules 01-10 |
 | `POLISY_Lab.ipynb` | Runs POLISY_DA modules 01-10 in Colab |
-| `docs/` | The website built by the first run, ready for GitHub Pages |
+| `docs/` | The research report (`index.html`) and the interactive lab (`lab.html`) from the latest run, ready for GitHub Pages |
 | `data/README.md` | Every dataset: what it is, where to get it, what the lab does with it |
 | `tests/`, `lab/tests/` | Tests for the file finder and for the lab |
 
@@ -41,20 +41,23 @@ run_all()     # fetch, inventory, profile, adapt, link, analyze, site
 
 ## The website
 
-`docs/` holds the site from the first run: a findings board with an evidence map, a chart explorer, maps of counties, metros and states, the data catalog with the match rate of every join, and the technical report. `docs/polisy_lab_offline.html` opens without internet.
+`docs/` holds the site built from the latest run:
+
+- `docs/index.html`, **the research report**: a critical assessment of the findings against the 2024-2026 literature, three stress tests, and four research seams at the level of the firm, with numbered figures and tables and a reference list. It is generated from `lab/polisy_lab/report/report.md` (the argument, yours to edit) and `results.json` (every figure, table and key number).
+- `docs/lab.html`, **the interactive lab**, the report's appendix: every finding with its grade, a chart explorer, maps of counties, metros and states, the data catalog with the match rate of every join, and the technical report. `docs/polisy_lab_offline.html` is the same lab without internet.
 
 To publish it with GitHub Pages, go to Settings → Pages → Deploy from a branch, and choose `main` and `/docs`. Pages on a private repository needs a paid GitHub plan; on a free plan, make the repository public first. To publish a new run, replace `docs/` with the new `lab/site/` folder.
 
-## What the first run found
+## What the first run found, and what is new
 
-The run on 25 September 2026 used the VRscores report, AIOE, DAIOE v1.0.0, IRS county migration 2012-13 to 2021-22 and the Correlates of State Policy. Highlights:
+The first run (25 September 2026) linked the VRscores report, AIOE, DAIOE v1.0.0, IRS county migration 2012-13 to 2021-22 and the Correlates of State Policy. The research report checks every finding against the literature and stress-tests the headline ones (28 September 2026):
 
-- **Households are leaving AI-exposed counties, faster every year (robust).** The household-weighted correlation between a county's AI exposure and its net domestic migration went from -0.19 (2012-13) to -0.51 (2020-21). Within the same state, one standard deviation more exposure meant -0.86 points of households a year in 2020-22 (t = -13.6).
-- **AI exposure measures disagree about who is exposed (robust).** Across 825 occupations, the correlation with the Republican share of workers runs from -0.18 (DAIOE generative AI) to +0.23 (Webb's AI patent score). With education and wage held equal, computerisation risk leans Republican and generative-AI exposure Democratic.
-- **Interstate movers go to more Republican states, and more so over time (robust).** The gap grows from +0.8 points (2012-13) to +2.5 (2020-21), with the political map held at the 2016 election.
-- **AI-exposed counties lose richer households than they gain (robust).**
+- **The "AI exodus" is mostly the partisan and telework geography of migration.** Households did leave AI-exposed counties, but 88% of the 2020-22 gradient disappears once density, education, income, housing costs, climate, the 2016 vote and telework are held equal.
+- **AI exposure's Democratic lean is composition; automation risk's Republican lean is not.** Generative-AI exposure leans Democratic only through the education, gender and race of the people in exposed jobs; computerisation risk leans Republican with every control.
+- **Most of what looks like organisational ideology is occupational structure.** Occupations explain 72% of industries' partisanship and 54% of their political balance.
+- **The rest is mostly established or an artefact.** Movers going to Republican places, high earners leaving large counties, education pulling occupations Democratic, and rising partisan sorting across employers are documented; VRscores "drift" is cohort replacement.
 
-All 28 findings, with their grades, research questions and the data that would settle them, are in the website and in `lab/docs/TECHNICAL_REPORT.md`.
+The report argues that the frontier is at the level of the firm, where the first run never went, and sets out four research seams: structural and elective partisanship in organisations; who decides and who is exposed in AI adoption; politics and the direction of AI invention; and technology reshaping the political composition of firms.
 
 ## Data
 

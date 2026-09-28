@@ -1,0 +1,25 @@
+pair,model,measure,variable,coef,lo,hi,t,n
+"DAIOE, generative AI vs Computerisation risk (Frey & Osborne)","+ education, wage","DAIOE, generative AI",exp_cumul_genai,-3.011,-4.513,-1.509,-3.929,611
+"DAIOE, generative AI vs Computerisation risk (Frey & Osborne)","+ education, wage",Computerisation risk (Frey & Osborne),fo17_p_computerisation,2.89,1.306,4.474,3.576,611
+"DAIOE, generative AI vs Computerisation risk (Frey & Osborne)",+ telework,"DAIOE, generative AI",exp_cumul_genai,-2.758,-4.685,-0.8317,-2.806,611
+"DAIOE, generative AI vs Computerisation risk (Frey & Osborne)",+ telework,Computerisation risk (Frey & Osborne),fo17_p_computerisation,2.904,1.296,4.512,3.54,611
+"DAIOE, generative AI vs Computerisation risk (Frey & Osborne)","+ gender, race","DAIOE, generative AI",exp_cumul_genai,-1.433,-3.678,0.811,-1.252,293
+"DAIOE, generative AI vs Computerisation risk (Frey & Osborne)","+ gender, race",Computerisation risk (Frey & Osborne),fo17_p_computerisation,3.529,2.08,4.979,4.773,293
+"DAIOE, generative AI vs Computerisation risk (Frey & Osborne)",+ occupation group,"DAIOE, generative AI",exp_cumul_genai,-0.9126,-3.268,1.443,-0.7592,293
+"DAIOE, generative AI vs Computerisation risk (Frey & Osborne)",+ occupation group,Computerisation risk (Frey & Osborne),fo17_p_computerisation,2.562,1.276,3.848,3.904,293
+"DAIOE, generative AI vs AI patents (Webb)","+ education, wage","DAIOE, generative AI",exp_cumul_genai,-1.991,-3.317,-0.6644,-2.942,674
+"DAIOE, generative AI vs AI patents (Webb)","+ education, wage",AI patents (Webb),webb19_ai_score,1.523,0.04652,2.999,2.022,674
+"DAIOE, generative AI vs AI patents (Webb)",+ telework,"DAIOE, generative AI",exp_cumul_genai,-2.044,-3.87,-0.2173,-2.193,674
+"DAIOE, generative AI vs AI patents (Webb)",+ telework,AI patents (Webb),webb19_ai_score,1.538,0.1423,2.934,2.16,674
+"DAIOE, generative AI vs AI patents (Webb)","+ gender, race","DAIOE, generative AI",exp_cumul_genai,-0.269,-2.408,1.87,-0.2465,301
+"DAIOE, generative AI vs AI patents (Webb)","+ gender, race",AI patents (Webb),webb19_ai_score,1.372,-0.2199,2.964,1.689,301
+"DAIOE, generative AI vs AI patents (Webb)",+ occupation group,"DAIOE, generative AI",exp_cumul_genai,0.08411,-2.295,2.463,0.06929,301
+"DAIOE, generative AI vs AI patents (Webb)",+ occupation group,AI patents (Webb),webb19_ai_score,1.269,-0.107,2.646,1.808,301
+GPT exposure with tools (Eloundou et al.) vs Computerisation risk (Frey & Osborne),"+ education, wage",GPT exposure with tools (Eloundou et al.),open24_human_E1_E2,-1.446,-3.288,0.3958,-1.539,611
+GPT exposure with tools (Eloundou et al.) vs Computerisation risk (Frey & Osborne),"+ education, wage",Computerisation risk (Frey & Osborne),fo17_p_computerisation,2.393,0.7366,4.049,2.832,611
+GPT exposure with tools (Eloundou et al.) vs Computerisation risk (Frey & Osborne),+ telework,GPT exposure with tools (Eloundou et al.),open24_human_E1_E2,-0.9258,-2.731,0.8792,-1.005,611
+GPT exposure with tools (Eloundou et al.) vs Computerisation risk (Frey & Osborne),+ telework,Computerisation risk (Frey & Osborne),fo17_p_computerisation,2.457,0.7837,4.13,2.878,611
+GPT exposure with tools (Eloundou et al.) vs Computerisation risk (Frey & Osborne),"+ gender, race",GPT exposure with tools (Eloundou et al.),open24_human_E1_E2,-0.6662,-2.139,0.807,-0.8864,293
+GPT exposure with tools (Eloundou et al.) vs Computerisation risk (Frey & Osborne),"+ gender, race",Computerisation risk (Frey & Osborne),fo17_p_computerisation,3.221,1.925,4.517,4.87,293
+GPT exposure with tools (Eloundou et al.) vs Computerisation risk (Frey & Osborne),+ occupation group,GPT exposure with tools (Eloundou et al.),open24_human_E1_E2,-0.7297,-2.935,1.475,-0.6486,293
+GPT exposure with tools (Eloundou et al.) vs Computerisation risk (Frey & Osborne),+ occupation group,Computerisation risk (Frey & Osborne),fo17_p_computerisation,2.42,1.237,3.603,4.009,293

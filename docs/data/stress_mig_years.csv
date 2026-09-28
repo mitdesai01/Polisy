@@ -1,0 +1,41 @@
+year,series,coef,lo,hi,t,n
+2013,"AI exposure, state effects only",-0.181,-0.2957,-0.06621,-3.091,3125
+2013,"AI exposure, all controls",-0.1369,-0.2203,-0.05342,-3.215,3125
+2013,"2016 Republican vote, all controls",0.3564,0.2275,0.4853,5.419,3125
+2013,"Telework, all controls",-0.2323,-0.316,-0.1486,-5.441,3125
+2014,"AI exposure, state effects only",-0.1162,-0.314,0.0816,-1.151,3097
+2014,"AI exposure, all controls",-0.1465,-0.2245,-0.06849,-3.681,3097
+2014,"2016 Republican vote, all controls",0.2485,0.0353,0.4617,2.285,3097
+2014,"Telework, all controls",-0.2176,-0.3036,-0.1316,-4.958,3097
+2015,"AI exposure, state effects only",-0.03303,-0.1045,0.03849,-0.9052,3066
+2015,"AI exposure, all controls",-0.1182,-0.1662,-0.07019,-4.825,3066
+2015,"2016 Republican vote, all controls",0.2233,0.1407,0.3058,5.3,3066
+2015,"Telework, all controls",-0.1312,-0.1863,-0.07611,-4.668,3066
+2016,"AI exposure, state effects only",-0.3227,-0.4374,-0.208,-5.515,3092
+2016,"AI exposure, all controls",-0.1202,-0.2025,-0.03791,-2.863,3092
+2016,"2016 Republican vote, all controls",0.4832,0.359,0.6074,7.627,3092
+2016,"Telework, all controls",-0.2494,-0.3373,-0.1615,-5.563,3092
+2017,"AI exposure, state effects only",-0.8212,-0.9566,-0.6859,-11.89,3103
+2017,"AI exposure, all controls",-0.1856,-0.312,-0.05914,-2.877,3103
+2017,"2016 Republican vote, all controls",0.8027,0.6632,0.9422,11.28,3103
+2017,"Telework, all controls",-0.3935,-0.5155,-0.2715,-6.321,3103
+2018,"AI exposure, state effects only",-0.4658,-0.5551,-0.3764,-10.22,3094
+2018,"AI exposure, all controls",-0.1657,-0.2487,-0.08262,-3.91,3094
+2018,"2016 Republican vote, all controls",0.5283,0.4313,0.6253,10.68,3094
+2018,"Telework, all controls",-0.2082,-0.2921,-0.1243,-4.862,3094
+2019,"AI exposure, state effects only",-0.3803,-0.4602,-0.3004,-9.33,3078
+2019,"AI exposure, all controls",-0.1629,-0.2402,-0.08571,-4.135,3078
+2019,"2016 Republican vote, all controls",0.4991,0.4071,0.5911,10.63,3078
+2019,"Telework, all controls",-0.2034,-0.2856,-0.1211,-4.849,3078
+2020,"AI exposure, state effects only",-0.8755,-1.043,-0.7082,-10.26,3084
+2020,"AI exposure, all controls",-0.07379,-0.1892,0.04158,-1.254,3084
+2020,"2016 Republican vote, all controls",0.7229,0.6169,0.829,13.36,3084
+2020,"Telework, all controls",-0.378,-0.482,-0.274,-7.124,3084
+2021,"AI exposure, state effects only",-1.018,-1.17,-0.8656,-13.09,3084
+2021,"AI exposure, all controls",-0.1036,-0.2104,0.003309,-1.899,3084
+2021,"2016 Republican vote, all controls",0.8198,0.7202,0.9195,16.12,3084
+2021,"Telework, all controls",-0.3183,-0.4198,-0.2168,-6.145,3084
+2022,"AI exposure, state effects only",-0.6809,-0.787,-0.5747,-12.57,3077
+2022,"AI exposure, all controls",-0.1432,-0.2489,-0.03753,-2.656,3077
+2022,"2016 Republican vote, all controls",0.6639,0.5577,0.7702,12.25,3077
+2022,"Telework, all controls",-0.2015,-0.2909,-0.112,-4.415,3077

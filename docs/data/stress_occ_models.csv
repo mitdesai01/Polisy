@@ -1,0 +1,51 @@
+measure,variable,family,model,coef,lo,hi,t,n
+"AIOE (Felten, Raj & Seamans)",frs21_aioe,AI benchmarks,Measure alone,-0.4503,-1.81,0.9098,-0.649,825
+"AIOE (Felten, Raj & Seamans)",frs21_aioe,AI benchmarks,"+ education, wage",-0.4455,-1.84,0.949,-0.6262,674
+"AIOE (Felten, Raj & Seamans)",frs21_aioe,AI benchmarks,+ telework,0.2822,-1.367,1.932,0.3353,674
+"AIOE (Felten, Raj & Seamans)",frs21_aioe,AI benchmarks,"+ gender, race",2.555,0.9268,4.183,3.076,301
+"AIOE (Felten, Raj & Seamans)",frs21_aioe,AI benchmarks,+ occupation group,3.206,1.008,5.404,2.858,301
+"DAIOE, all applications",exp_cumul,AI benchmarks,Measure alone,-1.522,-2.733,-0.3105,-2.462,825
+"DAIOE, all applications",exp_cumul,AI benchmarks,"+ education, wage",-1.085,-2.247,0.07609,-1.832,674
+"DAIOE, all applications",exp_cumul,AI benchmarks,+ telework,-0.856,-2.321,0.6087,-1.145,674
+"DAIOE, all applications",exp_cumul,AI benchmarks,"+ gender, race",0.5251,-1.194,2.244,0.5987,301
+"DAIOE, all applications",exp_cumul,AI benchmarks,+ occupation group,0.3939,-1.614,2.401,0.3846,301
+"DAIOE, generative AI",exp_cumul_genai,AI benchmarks,Measure alone,-1.973,-3.157,-0.7894,-3.267,825
+"DAIOE, generative AI",exp_cumul_genai,AI benchmarks,"+ education, wage",-1.866,-3.241,-0.491,-2.66,674
+"DAIOE, generative AI",exp_cumul_genai,AI benchmarks,+ telework,-1.699,-3.61,0.2116,-1.743,674
+"DAIOE, generative AI",exp_cumul_genai,AI benchmarks,"+ gender, race",-0.06819,-2.318,2.181,-0.05942,301
+"DAIOE, generative AI",exp_cumul_genai,AI benchmarks,+ occupation group,0.1325,-2.359,2.624,0.1042,301
+"GPT exposure, direct (Eloundou et al.)",open24_human_E1,Language models,Measure alone,-1.075,-2.483,0.3322,-1.497,821
+"GPT exposure, direct (Eloundou et al.)",open24_human_E1,Language models,"+ education, wage",-0.3397,-1.737,1.058,-0.4764,673
+"GPT exposure, direct (Eloundou et al.)",open24_human_E1,Language models,+ telework,-0.1602,-1.531,1.21,-0.2291,673
+"GPT exposure, direct (Eloundou et al.)",open24_human_E1,Language models,"+ gender, race",-0.5882,-1.869,0.6927,-0.9001,301
+"GPT exposure, direct (Eloundou et al.)",open24_human_E1,Language models,+ occupation group,-0.6464,-1.689,0.3958,-1.216,301
+GPT exposure with tools (Eloundou et al.),open24_human_E1_E2,Language models,Measure alone,-0.1145,-1.733,1.504,-0.1386,821
+GPT exposure with tools (Eloundou et al.),open24_human_E1_E2,Language models,"+ education, wage",-0.7372,-2.598,1.123,-0.7767,673
+GPT exposure with tools (Eloundou et al.),open24_human_E1_E2,Language models,+ telework,-0.2989,-2.121,1.523,-0.3215,673
+GPT exposure with tools (Eloundou et al.),open24_human_E1_E2,Language models,"+ gender, race",0.0636,-1.356,1.483,0.08784,301
+GPT exposure with tools (Eloundou et al.),open24_human_E1_E2,Language models,+ occupation group,-0.2806,-2.502,1.941,-0.2476,301
+GPT automation potential (Eloundou et al.),open24_gpt_automation,Language models,Measure alone,-0.1549,-1.329,1.02,-0.2584,821
+GPT automation potential (Eloundou et al.),open24_gpt_automation,Language models,"+ education, wage",-0.3944,-1.456,0.6666,-0.7286,673
+GPT automation potential (Eloundou et al.),open24_gpt_automation,Language models,+ telework,0.03013,-1.125,1.186,0.05111,673
+GPT automation potential (Eloundou et al.),open24_gpt_automation,Language models,"+ gender, race",1.858,0.4383,3.278,2.565,301
+GPT automation potential (Eloundou et al.),open24_gpt_automation,Language models,+ occupation group,1.357,-0.7591,3.472,1.257,301
+AI patents (Webb),webb19_ai_score,Patents,Measure alone,2.258,0.3194,4.197,2.283,824
+AI patents (Webb),webb19_ai_score,Patents,"+ education, wage",1.419,-0.1699,3.009,1.75,674
+AI patents (Webb),webb19_ai_score,Patents,+ telework,1.311,-0.2773,2.899,1.618,674
+AI patents (Webb),webb19_ai_score,Patents,"+ gender, race",1.354,-0.2088,2.916,1.698,301
+AI patents (Webb),webb19_ai_score,Patents,+ occupation group,1.27,-0.09421,2.635,1.825,301
+Software patents (Webb),webb19_software_score,Patents,Measure alone,1.852,-0.1082,3.812,1.852,824
+Software patents (Webb),webb19_software_score,Patents,"+ education, wage",-0.05539,-1.896,1.785,-0.05899,674
+Software patents (Webb),webb19_software_score,Patents,+ telework,-0.2914,-2.106,1.523,-0.3147,674
+Software patents (Webb),webb19_software_score,Patents,"+ gender, race",0.9192,-0.7399,2.578,1.086,301
+Software patents (Webb),webb19_software_score,Patents,+ occupation group,0.3691,-1.228,1.966,0.4529,301
+Robot patents (Webb),webb19_robot_score,Patents,Measure alone,1.031,-0.4993,2.561,1.32,824
+Robot patents (Webb),webb19_robot_score,Patents,"+ education, wage",0.2311,-1.473,1.935,0.2658,674
+Robot patents (Webb),webb19_robot_score,Patents,+ telework,-0.08962,-1.795,1.616,-0.103,674
+Robot patents (Webb),webb19_robot_score,Patents,"+ gender, race",-0.2906,-1.927,1.346,-0.3481,301
+Robot patents (Webb),webb19_robot_score,Patents,+ occupation group,0.1471,-1.95,2.244,0.1375,301
+Computerisation risk (Frey & Osborne),fo17_p_computerisation,Routine automation,Measure alone,0.8795,-0.59,2.349,1.173,722
+Computerisation risk (Frey & Osborne),fo17_p_computerisation,Routine automation,"+ education, wage",2.019,0.438,3.601,2.503,611
+Computerisation risk (Frey & Osborne),fo17_p_computerisation,Routine automation,+ telework,2.273,0.6467,3.898,2.74,611
+Computerisation risk (Frey & Osborne),fo17_p_computerisation,Routine automation,"+ gender, race",3.093,1.838,4.347,4.832,293
+Computerisation risk (Frey & Osborne),fo17_p_computerisation,Routine automation,+ occupation group,2.367,1.207,3.528,3.998,293

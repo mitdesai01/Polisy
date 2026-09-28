@@ -94,9 +94,28 @@ SOURCES = {
         "grain": "employer/metro/industry/occupation x year", "keys": ["soc", "naics6", "msa", "cbsa", "year"],
         "files": {"report": {"names": r"vrscores|report", "kinds": (".html",), "tokens": ()}}},
     "elections": {
-        "title": "County presidential returns 2000-2024", "theme": "politics", "publisher": "MIT Election Data and Science Lab",
-        "url": "https://doi.org/10.7910/DVN/VOQCHQ", "access": "found by POLISY_DA (COUNTYPRES)", "grain": "county x election year",
-        "keys": ["county_fips", "year"], "files": {}},
+        "title": "County presidential returns", "theme": "politics",
+        "publisher": "MIT Election Data and Science Lab (2000-2024); otherwise the county results compiled by T. McGovern (2016-2024)",
+        "url": "https://doi.org/10.7910/DVN/VOQCHQ",
+        "access": "the MIT file is found by POLISY_DA (COUNTYPRES); without it, module fetch downloads the McGovern files from GitHub",
+        "grain": "county x election year", "keys": ["county_fips", "year"],
+        "files": {"county_results": {"names": r"us_county_level_presidential_results|county_level_presidential",
+                                     "kinds": (".csv",), "tokens": ("~fips", "~pergop"), "many": True}}},
+    "county_context": {
+        "title": "County context: land area, population, education, income, housing costs, climate, industry mix",
+        "theme": "controls", "publisher": "JsonOfCounties (E. Gambit), compiled from the Census ACS 2019, BEA, NOAA, "
+                                          "County Business Patterns and the MIT Living Wage Calculator",
+        "url": "https://github.com/evangambit/JsonOfCounties", "access": "open; module fetch downloads counties.json from GitHub",
+        "grain": "county", "keys": ["county_fips"],
+        "files": {"data": {"names": r"^(json_?of_?)?counties$", "kinds": (".json",), "tokens": ()}}},
+    "telework": {
+        "title": "Jobs that can be done at home (occupations, industries, metro areas)", "theme": "controls",
+        "publisher": "Dingel & Neiman (2020, Journal of Public Economics)",
+        "url": "https://github.com/jdingel/DingelNeiman-workathome", "access": "open; module fetch downloads the result files from GitHub",
+        "grain": "occupation (O*NET-SOC), 2-digit NAICS, metro area", "keys": ["soc", "naics2", "cbsa"],
+        "files": {"occupation": {"names": r"occupations_workathome", "kinds": (".csv",), "tokens": ("onetsoccode", "teleworkable")},
+                  "industry": {"names": r"^naics_workfromhome$", "kinds": (".csv",), "tokens": ("naics", "teleworkableemp")},
+                  "metro": {"names": r"^msa_workfromhome$", "kinds": (".csv",), "tokens": ("area", "teleworkableemp")}}},
     "geography": {
         "title": "Census CBSA delineation (county -> metro)", "theme": "geography", "publisher": "US Census Bureau / OMB",
         "url": "https://www.census.gov/geographies/reference-files/time-series/demo/metro-micro/delineation-files.html",
@@ -105,7 +124,7 @@ SOURCES = {
 
 
 # --------------------------------------------------------------------------- discovery
-EXTRA_EXTS = (".html", ".htm", ".7z")
+EXTRA_EXTS = (".html", ".htm", ".7z", ".json")
 
 
 def _lab_items():
@@ -371,11 +390,40 @@ def fetch_patentsview(raw):
             log(f"patentsview: {f} failed ({e}); copy your local file into a search folder")
 
 
+GITHUB = "https://raw.githubusercontent.com/"
+GITHUB_FILES = {      # source -> (role, url): small open files the stress tests use as controls
+    "county_context": [("data", GITHUB + "evangambit/JsonOfCounties/master/counties.json")],
+    "telework": [("occupation", GITHUB + "jdingel/DingelNeiman-workathome/master/occ_onet_scores/output/occupations_workathome.csv"),
+                 ("industry", GITHUB + "jdingel/DingelNeiman-workathome/master/national_measures/output/NAICS_workfromhome.csv"),
+                 ("metro", GITHUB + "jdingel/DingelNeiman-workathome/master/MSA_measures/output/MSA_workfromhome.csv")],
+    "elections": [("county_results", GITHUB + f"tonmcg/US_County_Level_Election_Results_08-24/master/{y}_US_County_Level_Presidential_Results.csv")
+                  for y in (2016, 2020, 2024)],
+}
+
+
+def fetch_github(raw):
+    """The GitHub-hosted controls: county context, telework shares and (when POLISY_DA has no MIT file) county returns."""
+    for source, files in GITHUB_FILES.items():
+        if source == "elections" and pc.locate("COUNTYPRES")["path"] is not None:
+            continue
+        for role, url in files:
+            name = url.rsplit("/", 1)[1]
+            have = {Path(m or p).name.lower() for p, m in discover(source, role)}
+            if name.lower() in have or (have and not SOURCES[source]["files"][role].get("many")):
+                continue
+            try:
+                _get(url, raw / source / name, timeout=300)
+                log(f"{source}: {name} downloaded")
+            except Exception as e:
+                log(f"{source}: {name} failed ({e}); download it from {url} into a search folder")
+
+
 def fetch_all(patentsview=False):
     """Download what can be downloaded; never re-download a file that is already found."""
     raw = dirs()["RAW"]
     fetch_aioe(raw)
     fetch_zenodo(raw)
+    fetch_github(raw)
     fetch_page_files(raw, "btos", "https://www.census.gov/hfp/btos/data_downloads", keep=r"\.(xlsx|csv|zip)$")
     fetch_page_files(raw, "cspp", "https://ippsr.msu.edu/public-policy/correlates-state-policy", keep=r"correlates|cspp|codebook")
     fetch_irs(raw)

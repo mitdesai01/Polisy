@@ -25,6 +25,10 @@ import polisy_core as pc                                        # noqa: E402
 from polisy_lab import sources, run_all, LAB                    # noqa: E402
 from polisy_lab.core import read                                # noqa: E402
 from polisy_lab.site import albers_usa, _columnar, ASSETS       # noqa: E402
+from polisy_lab.report import build_report, HERE as REPORT_DIR  # noqa: E402
+from polisy_lab.report.references import REFS                   # noqa: E402
+from polisy_lab.report.audit import AUDIT, VERDICTS             # noqa: E402
+from polisy_lab.analyses import PRIORITY                        # noqa: E402
 
 DATA = [d for d in os.environ.get("POLISY_TEST_DATA", "").split(os.pathsep) if d]
 pc.CONFIG["SEARCH_DIRS"] = DATA
@@ -63,6 +67,41 @@ def test_columnar_tables_round_trip():
     enc = _columnar(d)
     assert isinstance(enc["enc"]["name"], dict) and isinstance(enc["enc"]["id"], list)   # repeated text is dictionary-coded
     assert _decode(enc) == rows
+
+
+def test_app_js_parses():
+    """A syntax error in the lab's script would leave every tab empty; node checks it without running it."""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    r = subprocess.run([node, "--check", str(ASSETS / "app.js")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+
+
+# --------------------------------------------------------------------------- the report
+def test_report_citations_and_audit_resolve():
+    import re
+    text = (REPORT_DIR / "report.md").read_text(encoding="utf-8")
+    keys = set(re.findall(r"@([a-z][\w-]*\d{4}[a-z]?|gambit|mcgovern)\b", text))
+    assert keys and keys <= set(REFS), sorted(keys - set(REFS))
+    for fid, (verdict, refs, _) in AUDIT.items():
+        assert verdict in VERDICTS, fid
+        assert set(refs) <= set(REFS), fid
+    assert set(PRIORITY) <= set(AUDIT), sorted(set(PRIORITY) - set(AUDIT))
+
+
+def test_report_builds_without_data(tmp_path):
+    out = build_report({"findings": [], "datasets": {}, "run": {}}, tmp_path / "index.html")
+    page = out.read_text(encoding="utf-8")
+    assert page.startswith("<!DOCTYPE html>") and "<title>POLISY Research Frontier</title>" in page
+    assert 'id="fig-seam"' in page and "<svg" in page                  # the diagram needs no data
+    assert 'class="missing"' in page                                   # data figures say what they need
+    for leftover in ("@@", "{{", "{fig:", "{tab:", "[@"):
+        assert leftover not in page, leftover
+    frag = build_report({"findings": [], "datasets": {}, "run": {}}, tmp_path / "fragment.html", fragment=True).read_text()
+    assert "<html" not in frag and "<body" not in frag and frag.lstrip().startswith("<title>")
 
 
 # --------------------------------------------------------------------------- discovery
@@ -119,6 +158,33 @@ def test_cspp_profile():
         assert tx.propgoppres > 50
 
 
+def test_county_context_and_telework():
+    need("county_context", "data")
+    need("telework", "occupation")
+    from polisy_lab.adapters.context import adapt_county_context, adapt_telework
+    assert adapt_county_context() and adapt_telework()
+    cc = read("county_context")
+    assert cc.county_fips.str.fullmatch(r"\d{5}").all() and not cc.county_fips.duplicated().any()
+    assert cc.log_density.notna().mean() > 0.95 and cc.ba_share.dropna().between(0, 100).all()
+    shares = cc[[c for c in cc if c.startswith("emp_")]].sum(axis=1)
+    assert ((shares - 1).abs() < 1e-6)[shares > 0].all()               # sector shares add up to one
+    tw = read("occ_telework")
+    assert tw.soc.str.fullmatch(r"\d{2}-\d{4}").all() and tw.teleworkable.between(0, 1).all()
+
+
+def test_compiled_county_returns():
+    need("elections", "county_results")
+    if pc.locate("COUNTYPRES")["path"] is not None:
+        pytest.skip("the MIT county returns are present, so the compiled files are not used")
+    from polisy_lab.adapters.politics import adapt_elections
+    assert adapt_elections()
+    v = read("votes_county_year")
+    assert {2016, 2020}.issubset(set(v.year)) and v.rep_vote_share.dropna().between(0, 1).all()
+    tx = v[(v.county_fips == "48201") & (v.year == 2016)]              # Harris County, Texas voted Democratic in 2016
+    if len(tx):
+        assert tx.rep_vote_share.iloc[0] < 0.5
+
+
 # --------------------------------------------------------------------------- the whole lab
 @pytest.mark.skipif(os.environ.get("POLISY_TEST_FULL") != "1", reason="set POLISY_TEST_FULL=1 to run the whole pipeline")
 def test_pipeline_and_site():
@@ -132,5 +198,12 @@ def test_pipeline_and_site():
         assert v["dataset"] in res["datasets"], v["id"]
         if v.get("edges"):
             assert v["edges"] in res["datasets"], v["id"]
-    page = (LAB["SITE"] / "index.html").read_text()
-    assert "<title>POLISY Lab</title>" in page and "polisy-data" in page
+    report = (LAB["SITE"] / "index.html").read_text()
+    assert "<title>POLISY Research Frontier</title>" in report and 'class="missing"' not in report
+    for leftover in ("@@", "{{", "{fig:", "{tab:", "[@"):
+        assert leftover not in report, leftover
+    lab = (LAB["SITE"] / "lab.html").read_text()
+    assert "<title>POLISY Lab</title>" in lab and "polisy-data" in lab
+    grades = {f["id"]: f["strength"] for f in res["findings"]}
+    if "stress-mig" in grades:                                       # the stress test re-grades the finding it tests
+        assert grades.get("mig-ai-exodus") == "fragile"

@@ -29,7 +29,7 @@ for _cand in (_HERE.parent.parent / "POLISY_DA", _HERE.parent, Path("/content/po
         sys.path.insert(0, str(_cand))
 import polisy_core as pc  # noqa: E402
 
-__version__ = "0.1.0 (2026-09-25)"
+__version__ = "0.2.0 (2026-09-28)"
 
 # --------------------------------------------------------------------------- config
 LAB_ROOT = Path(os.environ.get("POLISY_LAB_ROOT", pc.ROOT / "lab"))
@@ -71,6 +71,10 @@ GRAINS = {
     "vr_employer_summary": ("employer",),
     "vr_sorting": ("dimension", "measure", "year"),
     "votes_county_year": ("county_fips", "year"),
+    "county_context": ("county_fips",),
+    "occ_telework": ("soc",),
+    "ind_telework": ("naics2",),
+    "metro_telework": ("cbsa",),
     "btos_long": ("level", "geo", "question_id", "answer", "period"),
     "btos_ai": ("level", "geo", "measure", "period"),
     "cspp_state_year": ("state_fips", "year"),
@@ -229,15 +233,17 @@ def zscore(s):
     return (s - s.mean()) / s.std(ddof=1)
 
 
-def wls(df, y, xs, weights=None, fe=None, robust=True):
+def wls(df, y, xs, weights=None, fe=None, robust=True, cluster=None):
     """Weighted least squares with optional fixed effects; returns a small dict per term.
 
     Coefficients are reported per standard deviation of each continuous x (z-scored first), so
     effects are comparable across measures; 0/1 indicators stay as they are, so their coefficient
-    is the difference between the two groups. y stays in its own units.
+    is the difference between the two groups. y stays in its own units. Standard errors are
+    heteroskedasticity-robust (HC1), or clustered on the column `cluster` when it is given.
     """
     import statsmodels.api as sm
-    d = df.dropna(subset=[y] + list(xs) + ([weights] if weights else []) + ([fe] if fe else [])).copy()
+    need = [y] + list(xs) + [c for c in (weights, fe, cluster) if c]
+    d = df.dropna(subset=need).copy()
     if len(d) < len(xs) + 5:
         return None
     X = pd.DataFrame({x: d[x].astype(float) if set(pd.unique(d[x].dropna())) <= {0, 1} else zscore(d[x]) for x in xs}, index=d.index)
@@ -245,7 +251,10 @@ def wls(df, y, xs, weights=None, fe=None, robust=True):
         X = pd.concat([X, pd.get_dummies(d[fe].astype(str), prefix="fe", drop_first=True, dtype=float)], axis=1)
     X = sm.add_constant(X, has_constant="add")
     model = sm.WLS(d[y].astype(float), X, weights=d[weights].astype(float) if weights else np.ones(len(d)))
-    r = model.fit(cov_type="HC1") if robust else model.fit()
+    if cluster:
+        r = model.fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(d[cluster])[0]})
+    else:
+        r = model.fit(cov_type="HC1") if robust else model.fit()
     return {"n": int(r.nobs), "r2": float(r.rsquared),
             "terms": {x: {"coef": float(r.params[x]), "se": float(r.bse[x]), "t": float(r.tvalues[x]),
                           "p": float(r.pvalues[x])} for x in xs},
@@ -308,6 +317,20 @@ def finding(fid, title, claim, *, theme, level, datasets, strength, stats=None, 
          "caveats": list(caveats), "views": list(views), "rank": rank}
     RESULTS["findings"] = [x for x in RESULTS["findings"] if x["id"] != fid] + [f]
     return f
+
+
+def regrade(fid, strength, caveat="", title=None):
+    """Change the grade of a finding another analysis registered (a stress test that overturns or narrows it)."""
+    assert strength in STRENGTH, strength
+    for f in RESULTS["findings"]:
+        if f["id"] == fid:
+            f["strength"] = strength
+            if title:
+                f["title"] = title
+            if caveat and caveat not in f["caveats"]:
+                f["caveats"].append(caveat)
+            return f
+    return None
 
 
 def view(vid, kind, title, dataset, **spec):

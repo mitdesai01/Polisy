@@ -21,12 +21,13 @@ def coef_rows(model, label, names=None):
              "hi": v["coef"] + 1.96 * v["se"], "t": v["t"], "n": model["n"], "r2": model["r2"]} for t, v in model["terms"].items()]
 
 
-from . import occupations, exposure, industries, geography, organizations, adoption, innovation, migration, policy, landscape  # noqa: E402
+from . import occupations, exposure, industries, geography, organizations, adoption, innovation, migration, policy, landscape, stress  # noqa: E402
 
-ANALYSES = [occupations, exposure, industries, geography, organizations, adoption, innovation, migration, policy, landscape]
+# stress runs last: it re-grades findings the other modules registered
+ANALYSES = [occupations, exposure, industries, geography, organizations, adoption, innovation, migration, policy, landscape, stress]
 
 # The lab's reading order. Findings not listed keep the rank their module gave them, after these.
-PRIORITY = ["mig-ai-exodus", "occ-waves", "mig-partisan-state", "occ-ai-education", "state-environment", "mig-income", "occ-education-vs-pay",
+PRIORITY = ["stress-mig", "stress-occ", "stress-structure", "mig-ai-exodus", "occ-waves", "mig-partisan-state", "occ-ai-education", "state-environment", "mig-income", "occ-education-vs-pay",
             "sorting", "ind-ai-partisanship", "emp-bigtech", "metro-regime", "ind-composition", "occ-two-ais", "metro-space", "state-aige",
             "occ-daioe", "mig-exposure-gap", "state-regime", "ind-drift", "emp-drift", "policy-twfe", "mig-network", "landscape",
             "state-coverage", "occ-anomalies", "emp-artifacts"]

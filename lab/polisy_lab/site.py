@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-"""site: the POLISY lab website, built from results.json.
+"""site: the POLISY website, built from results.json.
 
     from polisy_lab.site import build_site
-    build_site()        # -> LAB["SITE"]/index.html, polisy_lab_offline.html, data/results.json, data/<table>.csv
+    build_site()        # -> LAB["SITE"]/index.html (report), lab.html (interactive lab), polisy_lab_offline.html, data/
 
-index.html is one self-contained file: styles, script, map shapes and results are inlined and
-Plotly loads from a pinned CDN. polisy_lab_offline.html also inlines Plotly, so it opens without
-internet. Everything on the page is read from results.json: a finding, view or dataset that an
-analysis registers shows up on the site without changes here or in site_assets/.
+index.html is the research report (report/): an academic page with static figures and tables, no
+scripts. lab.html is the interactive appendix: styles, script, map shapes and results are inlined and
+Plotly loads from a pinned CDN; polisy_lab_offline.html also inlines Plotly, so it opens without
+internet. Everything on both pages is read from results.json: a finding, view or dataset that an
+analysis registers shows up without changes here or in site_assets/.
 
 To publish on GitHub Pages, copy the site folder to a repository (e.g. as docs/) and choose
 Settings -> Pages -> Deploy from a branch -> that folder.
@@ -29,8 +30,8 @@ ASSETS = Path(__file__).with_name("site_assets")
 REPORT = Path(__file__).resolve().parents[1] / "docs" / "TECHNICAL_REPORT.md"
 PLOTLY_VERSION = "4.1.1"          # the version site_assets/app.js is tested against
 PLOTLY_CDN = f"https://cdn.jsdelivr.net/npm/plotly.js-dist-min@{PLOTLY_VERSION}/plotly.min.js"
-FONTS = ("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800"
-         "&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap")
+FONTS = ("https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400"
+         "&family=Source+Sans+3:wght@400;600;700&display=swap")
 
 # Column labels used anywhere on the site (a view's own `labels` win).
 LABELS = {
@@ -300,23 +301,30 @@ def _page(data_json, config, plotly_tag, document=True):
             f"{head.strip()}\n</head>\n<body>\n{body.strip()}\n</body>\n</html>\n")
 
 
-def build_site(results=None, out=None, offline=True, csv=True, fragment=None):
+def build_site(results=None, out=None, offline=True, csv=True, fragment=None, report_fragment=None):
     """Build the site from `results` (a results.json path or dict; default: this run, else the saved file).
 
     offline: also write polisy_lab_offline.html with Plotly inlined (needs the plotly package).
     csv: write every table behind the site as data/<id>.csv.
-    fragment: a path; also write a copy without <html>/<head>/<body> for embedding in another page.
+    fragment: a path; also write the lab without <html>/<head>/<body> for embedding in another page.
+    report_fragment: a path; the same for the report.
     """
+    from .report import build_report
     out = Path(out or LAB["SITE"])
     (out / "data").mkdir(parents=True, exist_ok=True)
     res = _load(results)
+    build_report(res, out / "index.html")
+    written = [out / "index.html"]
+    if report_fragment:
+        build_report(res, report_fragment, fragment=True)
+        written.append(Path(report_fragment))
     payload = _payload(res)
     data_json = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
     built = time.strftime("%Y-%m-%d %H:%M")
     config = {"built": built, "version": __version__, "plotly": PLOTLY_VERSION, "downloads": csv}
     cdn = f'<script src="{PLOTLY_CDN}"></script>'
-    (out / "index.html").write_text(_page(data_json, config, cdn), encoding="utf-8")
-    written = [out / "index.html"]
+    (out / "lab.html").write_text(_page(data_json, config, cdn), encoding="utf-8")
+    written.append(out / "lab.html")
     if offline:
         try:
             from plotly.offline import get_plotlyjs, get_plotlyjs_version
@@ -335,12 +343,14 @@ def build_site(results=None, out=None, offline=True, csv=True, fragment=None):
             pd.DataFrame(d["rows"], columns=d["columns"]).to_csv(out / "data" / f"{did}.csv", index=False)
     (out / ".nojekyll").write_text("")
     (out / "README.md").write_text(
-        "# POLISY lab site\n\nBuilt " + built + " by polisy_lab " + __version__ + ".\n\n"
-        "- `index.html`: the lab (Plotly loads from jsDelivr).\n"
-        "- `polisy_lab_offline.html`: the same page with Plotly inlined; opens without internet.\n"
+        "# POLISY site\n\nBuilt " + built + " by polisy_lab " + __version__ + ".\n\n"
+        "- `index.html`: the research report (static figures and tables; no scripts).\n"
+        "- `lab.html`: the interactive lab, the report's appendix (Plotly loads from jsDelivr).\n"
+        "- `polisy_lab_offline.html`: the interactive lab with Plotly inlined; opens without internet.\n"
         "- `data/`: results.json and every table behind the charts as CSV.\n\n"
         "GitHub Pages: put this folder in a repository (for example as `docs/`), then Settings -> Pages -> "
         "Deploy from a branch -> choose the branch and the folder.\n", encoding="utf-8")
-    kb = (out / "index.html").stat().st_size / 1e3
-    log(f"site: {len(payload.get('findings', []))} findings, {len(payload.get('views', {}))} views -> {out / 'index.html'} ({kb:,.0f} KB)")
+    kb = (out / "lab.html").stat().st_size / 1e3
+    log(f"site: report -> {out / 'index.html'}; {len(payload.get('findings', []))} findings, {len(payload.get('views', {}))} views "
+        f"-> {out / 'lab.html'} ({kb:,.0f} KB)")
     return written

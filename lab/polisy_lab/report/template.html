@@ -1,0 +1,46 @@
+<!--DOC--><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--/DOC--><title>POLISY Research Frontier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="{{FONTS}}">
+<style>
+{{CSS}}
+</style>
+<!--DOC--></head>
+<body>
+<!--/DOC--><div class="wrap">
+<nav class="toc" aria-label="Contents">
+<p class="toc-h">Contents</p>
+{{TOC}}
+<a class="l2" href="#references">References</a>
+<p class="toc-h toc-more">Also</p>
+<a class="ext" href="{{LAB}}">Interactive lab</a>
+<a class="ext" href="{{DATA}}">Results data (JSON)</a>
+<a class="ext" href="{{CODE}}">Code and notebook</a>
+</nav>
+<main>
+<header class="top">
+<p class="kicker">POLISY research memo &middot; Political Ideology &times; AI &times; Innovation</p>
+<h1>{{TITLE}}</h1>
+<p class="sub">{{SUBTITLE}}</p>
+<p class="meta">{{BUILT}} &middot; figures and tables built from the lab run of {{RUN}} &middot; polisy_lab {{VERSION}}</p>
+</header>
+{{BODY}}
+<section class="references">
+<h2 id="references">References</h2>
+{{REFS}}
+</section>
+<footer class="foot">
+<p>POLISY is research infrastructure: the <a href="{{CODE}}">code</a> finds the data files, links them, runs the analyses and writes this
+report and the <a href="{{LAB}}">interactive lab</a>. Figures and tables are regenerated at every run; the argument in the text reflects the
+evidence of the run named at the top.</p>
+</footer>
+</main>
+</div>
+<!--DOC--></body>
+</html>
+<!--/DOC-->

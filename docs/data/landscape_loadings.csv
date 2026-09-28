@@ -1,22 +1,23 @@
 measure,pc1,pc2
-Workforce Republican share,-0.2693,-0.01075
-AI exposure,0.2043,0.3399
-Net migration,-0.1656,-0.3167
-Gross migration,0.01873,0.3844
-Movers' income gap,-0.1404,-0.2145
-Republican share of the last presidential vote (%),-0.2752,0.1438
-Republican share of state legislators (%),-0.264,0.1558
-"Democratic control of state government (Ranney index, 0-1)",0.2563,-0.1545
-State government ideology (0 conservative to 100 liberal),0.2537,-0.1498
-Economic policy liberalism (Caughey and Warshaw),0.2766,-0.1371
-Social policy liberalism (Caughey and Warshaw),0.281,-0.1073
-Public economic liberalism (Caughey and Warshaw),0.26,-0.09689
-Public social liberalism (Caughey and Warshaw),0.2681,-0.1257
-Right-to-work law (1 = yes),-0.2472,0.1217
-Adults with a college degree (%),0.2459,0.005154
-Top corporate income tax rate (%),0.1456,-0.01361
-Median household income ($),0.2303,0.1975
-Income per capita ($),0.2334,0.2892
-Unemployment rate (%),0.005624,0.19
-Workforce drift,-0.1055,0.01405
-VRscores coverage,0.07967,0.5192
+Workforce Republican share,-0.2632,-0.008275
+Republican vote share,-0.2622,-0.1954
+AI exposure,0.2023,0.3187
+Net migration,-0.1603,-0.2712
+Gross migration,0.02797,0.4021
+Movers' income gap,-0.1346,-0.1708
+Republican share of the last presidential vote (%),-0.2668,0.1429
+Republican share of state legislators (%),-0.254,0.1622
+"Democratic control of state government (Ranney index, 0-1)",0.2443,-0.1703
+State government ideology (0 conservative to 100 liberal),0.2415,-0.1681
+Economic policy liberalism (Caughey and Warshaw),0.2642,-0.1574
+Social policy liberalism (Caughey and Warshaw),0.2682,-0.13
+Public economic liberalism (Caughey and Warshaw),0.2512,-0.1064
+Public social liberalism (Caughey and Warshaw),0.2587,-0.1279
+Right-to-work law (1 = yes),-0.2353,0.1425
+Adults with a college degree (%),0.237,-0.01053
+Top corporate income tax rate (%),0.1378,-0.04129
+Median household income ($),0.2241,0.174
+Income per capita ($),0.2275,0.2592
+Unemployment rate (%),0.009252,0.1877
+Workforce drift,-0.1038,0.007768
+VRscores coverage,0.08709,0.5172

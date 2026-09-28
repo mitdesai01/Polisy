@@ -9,6 +9,7 @@ from .ai import adapt_aioe, adapt_dynamic_aioe, adapt_btos
 from .politics import adapt_vrscores, adapt_elections, adapt_cspp
 from .innovation import adapt_patentsview
 from .geo import adapt_geo, adapt_irs_migration
+from .context import adapt_county_context, adapt_telework
 
 ADAPTERS = {
     "aioe": adapt_aioe,
@@ -20,4 +21,6 @@ ADAPTERS = {
     "geography": adapt_geo,
     "irs_migration": adapt_irs_migration,
     "patentsview": adapt_patentsview,
+    "county_context": adapt_county_context,
+    "telework": adapt_telework,
 }

@@ -222,8 +222,7 @@ def _vr_from_report(path):
 def adapt_elections():
     loc = pc.locate("COUNTYPRES")
     if loc["path"] is None:
-        log("elections: county presidential returns not found (see POLISY_DA FILES['COUNTYPRES'])")
-        return False
+        return _elections_compiled()
     log(f"elections: using {Path(loc['path']).name}{' :: ' + loc['member'] if loc.get('member') else ''} (found by POLISY_DA as COUNTYPRES)")
     d = pc.read_table(loc["path"], loc["member"], header_hint="candidatevotes",
                       columns={"year", "countyfips", "party", "candidatevotes", "mode"})
@@ -246,6 +245,35 @@ def adapt_elections():
     v["year"] = v.year.astype(int)
     v["state_fips"] = v.county_fips.str[:2]
     write(v, "votes_county_year")
+    return True
+
+
+def _elections_compiled():
+    """County returns 2016-2024 as compiled by T. McGovern (GitHub), when POLISY_DA has no MIT file."""
+    from ..sources import discover
+    files = discover("elections", "county_results")
+    if not files:
+        log("elections: no county presidential returns (MIT file for POLISY_DA's COUNTYPRES, or module fetch)")
+        return False
+    out = []
+    for p, m in files:
+        year = re.search(r"(20\d\d)", Path(m or p).name)
+        d = pc.read_table(p, m)
+        d.columns = [pc.squash(c) for c in d.columns]
+        fips = next((c for c in ("countyfips", "combinedfips", "fips") if c in d), None)
+        if not year or fips is None or "votesgop" not in d or "votesdem" not in d:
+            log(f"elections: {Path(m or p).name} not recognised")
+            continue
+        v = pd.DataFrame({"county_fips": pc.digits(d[fips]).str.extract(r"(\d+)")[0].str.zfill(5), "year": int(year.group(1)),
+                          "rep_votes": pd.to_numeric(d.votesgop, errors="coerce"), "dem_votes": pd.to_numeric(d.votesdem, errors="coerce")})
+        out.append(v.dropna(subset=["county_fips"]))
+        log(f"elections: {Path(m or p).name} ({len(v):,} counties)")
+    if not out:
+        return False
+    v = pd.concat(out).groupby(["county_fips", "year"], as_index=False)[["rep_votes", "dem_votes"]].sum(min_count=1)
+    v["rep_vote_share"] = v.rep_votes / (v.dem_votes + v.rep_votes)
+    v["state_fips"] = v.county_fips.str[:2]
+    write(v, "votes_county_year", note="compiled county returns (McGovern), 2016-2024")
     return True
 
 

@@ -5,7 +5,8 @@
 # # POLISY Lab: Political Ideology × AI × Innovation
 #
 # Runs the POLISY lab from start to finish: finds your data files, turns each source into canonical tables, links them,
-# runs the analyses and writes the interactive website (ready for GitHub Pages).
+# runs the analyses, stress-tests the headline findings, and writes the research report and the interactive lab
+# (ready for GitHub Pages).
 #
 # **Before you start**
 #
@@ -74,7 +75,8 @@ if RUN_POLISY_DA:
         pc.run(module)
 
 # %%
-# 4. Download the open datasets that are not in your folders yet (AIOE, DAIOE, BTOS, CSPP, IRS state and county files).
+# 4. Download the open datasets that are not in your folders yet (AIOE, DAIOE, BTOS, CSPP, IRS state and county files,
+#    and the stress tests' controls from GitHub: county context, Dingel & Neiman telework shares, county presidential returns).
 # Files you already have, under any name and inside zips, are skipped. PatentsView is not downloaded (patentsview=False).
 run_all(stages=("fetch",), fetch=True, patentsview=False)
 
@@ -100,7 +102,8 @@ findings = pd.read_csv(LAB["RESULTS"] / "findings.csv").sort_values("rank")
 findings[["rank", "strength", "theme", "title"]]
 
 # %%
-# 8. The website: index.html (Plotly from a CDN) and polisy_lab_offline.html (works without internet)
+# 8. The website: index.html (the research report), lab.html (the interactive lab; Plotly from a CDN) and
+#    polisy_lab_offline.html (the lab without internet). The report's argument is in polisy_lab/report/report.md.
 run_all(stages=("site",), fetch=False)
 site = LAB["SITE"]
 print(site / "index.html")
@@ -128,7 +131,8 @@ print(site_zip, results_zip, sep="\n")
 # 2. In the repository: Settings, then Pages, then "Deploy from a branch"; choose the branch and `/docs`; save.
 # 3. After a minute the lab is at `https://<user>.github.io/<repository>/`.
 #
-# To rebuild the site after changing an analysis, run steps 7 and 8 again; nothing else needs to rerun.
+# To rebuild the site after changing an analysis, run steps 7 and 8 again; after editing the report's text
+# (`lab/polisy_lab/report/report.md`), step 8 alone is enough.
 
 # %%
 # 11. Work with the tables directly: every canonical table and panel is a Parquet file (DuckDB, Polars, pandas)

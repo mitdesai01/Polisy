@@ -1,52 +1,52 @@
-state,name,state_fips,region,vr_rep_share,drift_pp,party_regime,aige,coverage,jobs_2019,vr_workers
-AL,Alabama,01,South,0.6207,-1.729,modelled by L2,0.5171,0.08548,1989130,170000.0
-AK,Alaska,02,West,0.6121,-2.12,party registration,0.471,0.1073,322481,34610.0
-AZ,Arizona,04,West,0.5183,-3.452,party registration,0.9088,0.1813,2903159,526300.0
-AR,Arkansas,05,South,0.6098,-2.035,party registration,0.243,0.1157,1211957,140300.0
-CA,California,06,West,0.3253,-3.225,party registration,1.028,0.1555,17630028,2741000.0
-CO,Colorado,08,West,0.398,-4.805,party registration,0.981,0.2304,2735101,630300.0
-CT,Connecticut,09,Northeast,0.3504,-3.534,party registration,1.155,0.1473,1670087,245900.0
-DE,Delaware,10,South,0.4444,-3.595,party registration,0.9454,0.01898,443564,8420.0
-DC,District of Columbia,11,South,0.2595,-3.611,party registration,2.339,0.7747,775273,600600.0
-FL,Florida,12,South,0.4952,-2.452,party registration,0.738,0.1641,8872965,1456000.0
-GA,Georgia,13,South,0.4051,-3.299,primary-based,0.8129,0.05601,4506539,252400.0
-HI,Hawaii,15,West,0.345,-3.114,modelled by L2,0.2347,0.07863,652765,51320.0
-ID,Idaho,16,West,0.6946,-2.196,party registration,0.4953,0.1263,751100,94840.0
-IL,Illinois,17,Midwest,0.2986,-4.579,primary-based,0.9888,0.1699,5995786,1019000.0
-IN,Indiana,18,Midwest,0.5397,-3.618,primary-based,0.4298,0.1351,3075063,415600.0
-IA,Iowa,19,Midwest,0.4643,-3.003,party registration,0.6961,0.127,1552827,197200.0
-KS,Kansas,20,Midwest,0.6478,-1.682,party registration,0.9477,0.05377,1392734,74890.0
-KY,Kentucky,21,South,0.4795,-1.801,party registration,0.4901,0.1116,1896502,211600.0
-LA,Louisiana,22,South,0.5633,-1.604,party registration,0.5144,0.1275,1915799,244200.0
-ME,Maine,23,Northeast,0.3805,-3.202,party registration,0.8209,0.06454,618499,39920.0
-MD,Maryland,24,South,0.3643,-2.513,party registration,1.151,0.1041,2689153,279900.0
-MA,Massachusetts,25,Northeast,0.2428,-2.691,party registration,1.522,0.2062,3612610,745000.0
-MI,Michigan,26,Midwest,0.3767,-7.17,primary-based,0.678,0.1585,4357448,690500.0
-MN,Minnesota,27,Midwest,0.4856,-9.168,modelled by L2,1.152,0.1537,2897616,445500.0
-MS,Mississippi,28,South,0.5984,-0.9804,primary-based,0.2473,0.06366,1131942,72050.0
-MO,Missouri,29,Midwest,0.5388,-8.492,modelled by L2,0.9743,0.2164,2806153,607300.0
-MT,Montana,30,West,0.5936,-5.1,modelled by L2,0.5934,0.05638,470599,26530.0
-NE,Nebraska,31,Midwest,0.5593,-2.733,party registration,0.8861,0.1488,982259,146200.0
-NV,Nevada,32,West,0.4697,-3.909,party registration,-0.05791,0.1647,1408016,231900.0
-NH,New Hampshire,33,Northeast,0.5022,-0.9624,party registration,0.9081,0.03555,664862,23630.0
-NJ,New Jersey,34,Northeast,0.3599,-2.227,party registration,1.117,0.0133,4081957,54290.0
-NM,New Mexico,35,West,0.3774,-3.309,party registration,0.9067,0.09759,833210,81310.0
-NY,New York,36,Northeast,0.3205,-3.117,party registration,1.496,0.2284,9541336,2179000.0
-NC,North Carolina,37,South,0.4279,-3.206,party registration,0.7378,0.181,4496790,813800.0
-ND,North Dakota,38,Midwest,0.5266,-3.752,modelled by L2,0.5213,0.08953,420941,37690.0
-OH,Ohio,39,Midwest,0.4904,-4.04,primary-based,0.8505,0.1687,5431374,916000.0
-OK,Oklahoma,40,South,0.6459,-1.686,party registration,0.6218,0.1237,1621270,200500.0
-OR,Oregon,41,West,0.299,-3.775,party registration,0.7986,0.2009,1951864,392100.0
-PA,Pennsylvania,42,Northeast,0.4277,-2.752,party registration,1.014,0.1932,5922858,1145000.0
-RI,Rhode Island,44,Northeast,0.2853,-3.614,party registration,1.004,0.2419,485328,117400.0
-SC,South Carolina,45,South,0.576,-4.069,primary-based,0.1656,0.1306,2125724,277700.0
-SD,South Dakota,46,Midwest,0.6921,-0.3261,party registration,0.6622,0.08214,429261,35260.0
-TN,Tennessee,47,South,0.5658,-3.252,primary-based,0.5869,0.166,3029784,503000.0
-TX,Texas,48,South,0.4737,-4.563,primary-based,0.9305,0.1613,12586401,2030000.0
-UT,Utah,49,West,0.7278,-2.231,party registration,1.022,0.165,1518805,250600.0
-VT,Vermont,50,Northeast,0.2046,-5.39,modelled by L2,1.02,0.08138,290195,23620.0
-VA,Virginia,51,South,0.4161,-5.506,primary-based,1.254,0.1048,3936776,412400.0
-WA,Washington,53,West,0.2703,-3.992,primary-based,1.085,0.1849,3439691,635900.0
-WV,West Virginia,54,South,0.5943,0.2351,party registration,0.6934,0.07243,688445,49860.0
-WI,Wisconsin,55,Midwest,0.5776,-3.282,modelled by L2,0.7248,0.1531,2884045,441500.0
-WY,Wyoming,56,West,0.7985,1.67,party registration,0.06032,0.04734,277340,13130.0
+state,name,state_fips,region,vr_rep_share,drift_pp,party_regime,aige,coverage,jobs_2019,rep_vote_share,vr_workers
+AL,Alabama,01,South,0.6207,-1.729,modelled by L2,0.5171,0.08548,1989130,0.6544,170000.0
+AK,Alaska,02,West,0.6121,-2.12,party registration,0.471,0.1073,322481,0.569,34610.0
+AZ,Arizona,04,West,0.5183,-3.452,party registration,0.9088,0.1813,2903159,0.5279,526300.0
+AR,Arkansas,05,South,0.6098,-2.035,party registration,0.243,0.1157,1211957,0.6567,140300.0
+CA,California,06,West,0.3253,-3.225,party registration,1.028,0.1555,17630028,0.396,2741000.0
+CO,Colorado,08,West,0.398,-4.805,party registration,0.981,0.2304,2735101,0.4435,630300.0
+CT,Connecticut,09,Northeast,0.3504,-3.534,party registration,1.155,0.1473,1670087,0.4262,245900.0
+DE,Delaware,10,South,0.4444,-3.595,party registration,0.9454,0.01898,443564,0.4252,8420.0
+DC,District of Columbia,11,South,0.2595,-3.611,party registration,2.339,0.7747,775273,0.06685,600600.0
+FL,Florida,12,South,0.4952,-2.452,party registration,0.738,0.1641,8872965,0.5661,1456000.0
+GA,Georgia,13,South,0.4051,-3.299,primary-based,0.8129,0.05601,4506539,0.511,252400.0
+HI,Hawaii,15,West,0.345,-3.114,modelled by L2,0.2347,0.07863,652765,0.3822,51320.0
+ID,Idaho,16,West,0.6946,-2.196,party registration,0.4953,0.1263,751100,0.6876,94840.0
+IL,Illinois,17,Midwest,0.2986,-4.579,primary-based,0.9888,0.1699,5995786,0.4443,1019000.0
+IN,Indiana,18,Midwest,0.5397,-3.618,primary-based,0.4298,0.1351,3075063,0.5965,415600.0
+IA,Iowa,19,Midwest,0.4643,-3.003,party registration,0.6961,0.127,1552827,0.5672,197200.0
+KS,Kansas,20,Midwest,0.6478,-1.682,party registration,0.9477,0.05377,1392734,0.5821,74890.0
+KY,Kentucky,21,South,0.4795,-1.801,party registration,0.4901,0.1116,1896502,0.6551,211600.0
+LA,Louisiana,22,South,0.5633,-1.604,party registration,0.5144,0.1275,1915799,0.6118,244200.0
+ME,Maine,23,Northeast,0.3805,-3.202,party registration,0.8209,0.06454,618499,0.4646,39920.0
+MD,Maryland,24,South,0.3643,-2.513,party registration,1.151,0.1041,2689153,0.3525,279900.0
+MA,Massachusetts,25,Northeast,0.2428,-2.691,party registration,1.522,0.2062,3612610,0.3704,745000.0
+MI,Michigan,26,Midwest,0.3767,-7.17,primary-based,0.678,0.1585,4357448,0.5072,690500.0
+MN,Minnesota,27,Midwest,0.4856,-9.168,modelled by L2,1.152,0.1537,2897616,0.4783,445500.0
+MS,Mississippi,28,South,0.5984,-0.9804,primary-based,0.2473,0.06366,1131942,0.6157,72050.0
+MO,Missouri,29,Midwest,0.5388,-8.492,modelled by L2,0.9743,0.2164,2806153,0.5934,607300.0
+MT,Montana,30,West,0.5936,-5.1,modelled by L2,0.5934,0.05638,470599,0.6029,26530.0
+NE,Nebraska,31,Midwest,0.5593,-2.733,party registration,0.8861,0.1488,982259,0.6042,146200.0
+NV,Nevada,32,West,0.4697,-3.909,party registration,-0.05791,0.1647,1408016,0.5158,231900.0
+NH,New Hampshire,33,Northeast,0.5022,-0.9624,party registration,0.9081,0.03555,664862,0.4859,23630.0
+NJ,New Jersey,34,Northeast,0.3599,-2.227,party registration,1.117,0.0133,4081957,0.4699,54290.0
+NM,New Mexico,35,West,0.3774,-3.309,party registration,0.9067,0.09759,833210,0.4693,81310.0
+NY,New York,36,Northeast,0.3205,-3.117,party registration,1.496,0.2284,9541336,0.4366,2179000.0
+NC,North Carolina,37,South,0.4279,-3.206,party registration,0.7378,0.181,4496790,0.5163,813800.0
+ND,North Dakota,38,Midwest,0.5266,-3.752,modelled by L2,0.5213,0.08953,420941,0.687,37690.0
+OH,Ohio,39,Midwest,0.4904,-4.04,primary-based,0.8505,0.1687,5431374,0.5566,916000.0
+OK,Oklahoma,40,South,0.6459,-1.686,party registration,0.6218,0.1237,1621270,0.6747,200500.0
+OR,Oregon,41,West,0.299,-3.775,party registration,0.7986,0.2009,1951864,0.4257,392100.0
+PA,Pennsylvania,42,Northeast,0.4277,-2.752,party registration,1.014,0.1932,5922858,0.5086,1145000.0
+RI,Rhode Island,44,Northeast,0.2853,-3.614,party registration,1.004,0.2419,485328,0.4292,117400.0
+SC,South Carolina,45,South,0.576,-4.069,primary-based,0.1656,0.1306,2125724,0.5906,277700.0
+SD,South Dakota,46,Midwest,0.6921,-0.3261,party registration,0.6622,0.08214,429261,0.6495,35260.0
+TN,Tennessee,47,South,0.5658,-3.252,primary-based,0.5869,0.166,3029784,0.6506,503000.0
+TX,Texas,48,South,0.4737,-4.563,primary-based,0.9305,0.1613,12586401,0.5694,2030000.0
+UT,Utah,49,West,0.7278,-2.231,party registration,1.022,0.165,1518805,0.6111,250600.0
+VT,Vermont,50,Northeast,0.2046,-5.39,modelled by L2,1.02,0.08138,290195,0.3361,23620.0
+VA,Virginia,51,South,0.4161,-5.506,primary-based,1.254,0.1048,3936776,0.4705,412400.0
+WA,Washington,53,West,0.2703,-3.992,primary-based,1.085,0.1849,3439691,0.4054,635900.0
+WV,West Virginia,54,South,0.5943,0.2351,party registration,0.6934,0.07243,688445,0.7134,49860.0
+WI,Wisconsin,55,Midwest,0.5776,-3.282,modelled by L2,0.7248,0.1531,2884045,0.5044,441500.0
+WY,Wyoming,56,West,0.7985,1.67,party registration,0.06032,0.04734,277340,0.7348,13130.0

@@ -1074,11 +1074,12 @@
     const run = DATA.run || {};
     const src = sourceStatus();
     const head = h("header", { class: "masthead" },
-      h("span", { class: "eyebrow" }, "Research theme 1"),
+      h("span", { class: "eyebrow" }, "Interactive appendix to the research report"),
       h("h1", null, "Political Ideology", h("span", { class: "times" }, " × "), "AI", h("span", { class: "times" }, " × "), "Innovation"),
       h("p", { class: "lede" }, "POLISY (Politics, Organizations, Leadership, Strategy & Innovation) is an open research lab. It links VRscores measures of " +
         "workforce partisanship to open data on AI exposure, AI adoption, patenting, migration and state policy, and keeps every pattern it finds " +
-        "as a graded finding, with the research question it raises and the data needed to answer it."),
+        "as a graded finding, with the research question it raises and the data needed to answer it. The argument, the stress tests and " +
+        "the research agenda are in the ", h("a", { href: "index.html" }, "research report"), "."),
       h("div", { class: "status" },
         h("span", { class: "count" }, h("b", null, String(FINDINGS.length)), "findings"),
         GRADES.filter((g) => counts[g[0]]).map((g) => h("span", { class: "count", title: g[2] }, glyph(g[0]), h("b", null, String(counts[g[0]])), g[1].toLowerCase())),
@@ -1311,7 +1312,7 @@
         h("td", { class: "wrap-cell" }, d.columns.filter((c) => !c.startsWith("_")).join(", ")),
         h("td", null, (used[d.id] || []).map((vid, i) => [i ? ", " : "", h("a", { href: "#v-" + vid }, vid)])),
         h("td", null, used[d.id] ? null : h("a", { href: "#v-table-" + d.id }, "Open table"))))));
-    root.append(h("section", { class: "stack" }, sectionHead("Tables", "Every table behind the site", "Open any table in Explore, or take it from data/ next to index.html."),
+    root.append(h("section", { class: "stack" }, sectionHead("Tables", "Every table behind the site", "Open any table in Explore, or take it from the data/ folder of the site."),
       h("div", { class: "tbl-wrap" }, reg)));
 
     const prof = DATA.profiles || {};

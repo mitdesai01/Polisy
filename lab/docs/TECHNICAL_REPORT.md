@@ -1,8 +1,8 @@
 # POLISY Lab: technical report
 
-Version 0.1.0 of `polisy_lab`, 25 September 2026. Research theme 1: Political Ideology × AI × Innovation.
+Version 0.2.0 of `polisy_lab`, 28 September 2026. Research theme 1: Political Ideology × AI × Innovation.
 
-This report explains how to run the lab in Google Colab, what each stage does, which datasets it uses and how they are linked, what the outputs mean, what the first run found, and how to rebuild and publish the website. The site's Methods tab shows this same text.
+This report explains how to run the lab in Google Colab, what each stage does, which datasets it uses and how they are linked, what the outputs mean, what the first run found, and how to rebuild and publish the website. The interactive lab's Methods tab shows this same text. The research argument (what is new, what is not, and the research agenda) is in the research report, `site/index.html`, built from `polisy_lab/report/report.md`.
 
 ## 1. What POLISY is
 
@@ -13,6 +13,7 @@ Three rules shape the design:
 1. **Nothing is hard-wired to a file name.** Every input is found by what its name looks like and what its header contains, inside folders or inside zip files.
 2. **Every join is measured.** Each link between two datasets records how much matched, so a result that rests on half the data says so.
 3. **The website is generated.** Analyses register findings, charts and tables; the site draws whatever is registered. Adding an analysis never requires touching the site code.
+4. **Headline findings are stress-tested.** A stress-test module re-estimates each headline finding against its first rival explanation and re-grades it (Section 7).
 
 ## 2. What you need
 
@@ -29,7 +30,7 @@ The lab runs in a Colab notebook (`notebooks/POLISY_AI_Innovation_Lab.ipynb`, or
 | IRS SOI county migration | `IRS_SOI_County_Migration.zip` (Inflow and Outflow folders, 2012-13 to 2021-22) | migration findings |
 | Correlates of State Policy | `cspp_data_2026-09-24_academic and policy addition.csv` (in a zip) | state political and policy environment |
 
-Optional sources the lab uses when present: county presidential returns and the Census CBSA delineation file (found by POLISY_DA), the BTOS data downloads (fetched automatically in Colab), IRS state-to-state files (fetched automatically) and the four PatentsView tables (deferred in this version).
+Optional sources the lab uses when present: county presidential returns and the Census CBSA delineation file (found by POLISY_DA), the BTOS data downloads (fetched automatically in Colab), IRS state-to-state files (fetched automatically) and the four PatentsView tables (deferred in this version). The stress tests use three small files from GitHub, which the fetch stage downloads: county context (`counties.json`), telework shares by occupation, industry and metro (Dingel and Neiman), and county presidential returns for 2016-2024 (used only when POLISY_DA has no MIT file).
 
 ## 3. Run it in Google Colab, step by step
 
@@ -72,7 +73,7 @@ The notebook prints the inventory, the link rates and the findings table, and se
 
 ### Step 6. Publish on GitHub Pages
 
-Copy the folder `POLISY/lab/site/` into a GitHub repository, for example as `docs/`. In the repository go to Settings, then Pages, choose "Deploy from a branch", pick the branch and the `/docs` folder, and save. The site appears at `https://<user>.github.io/<repository>/` a minute later. `index.html` loads Plotly and the fonts from public CDNs; `polisy_lab_offline.html` carries Plotly inside and opens without internet.
+Copy the folder `POLISY/lab/site/` into a GitHub repository, for example as `docs/`. In the repository go to Settings, then Pages, choose "Deploy from a branch", pick the branch and the `/docs` folder, and save. The site appears at `https://<user>.github.io/<repository>/` a minute later. `index.html` is the research report: static figures and tables, no scripts, fonts from Google Fonts with system fallbacks. `lab.html` is the interactive lab, which loads Plotly from a public CDN; `polisy_lab_offline.html` carries Plotly inside and opens without internet.
 
 ## 4. The pipeline, stage by stage
 
@@ -137,6 +138,12 @@ Adapters write one table per concept, each with a declared grain (`core.GRAINS`)
 | `x_top_corporateincometaxrate` | Top corporate income tax rate (%) |
 | `hincomemed`, `incomepcap`, `unemployment` | Median household income, income per capita, unemployment rate |
 
+**County context** (JsonOfCounties, compiled by E. Gambit from the Census ACS 2019, BEA, NOAA, County Business Patterns and the MIT Living Wage Calculator). One record per county: land area, population, bachelor's degree share, average income, housing costs, January temperature, the 2016 vote and employment by sector. The stress tests use it for density, education, income, housing costs, climate and industry mix. It is a compilation, so official files (Census Gazetteer, ACS, USDA codes) should replace it before publication.
+
+**Telework shares** (Dingel and Neiman 2020, *Journal of Public Economics*). The share of jobs that can be done at home, by O*NET occupation, 2-digit NAICS and metro area. The county measure is the county's sector mix weighted by the national sector shares.
+
+**County presidential returns, 2016-2024** (compiled by T. McGovern on GitHub from news-organisation tallies). Used only when POLISY_DA has no MIT Election Lab file; they give the 2016 vote for the stress tests and the county panel's vote shares.
+
 **Waiting**: Census BTOS (actual AI use by firms; the adapter reads the question-by-answer-by-period workbooks and the Colab fetch downloads them) and PatentsView (AI patents by CPC codes, inventor locations and moves; deferred in this version).
 
 ## 6. How the datasets connect
@@ -166,6 +173,7 @@ Metro-level AI exposure (the AIIE of a metro's industry mix, from QCEW by MSA) n
 - **Spatial statistics**: Moran's I with 8-nearest-neighbour weights on great-circle distance, 999 permutations; local indicators give the high-high and low-low clusters on the metro map.
 - **Structure**: principal components; k-means with the number of groups chosen by silhouette; isolation forests for unusual profiles; the migration network uses PageRank and greedy modularity communities (networkx, fixed seeds).
 - **Panels**: two-way fixed effects (state and year) with standard errors clustered by state, and Benjamini-Hochberg false-discovery control across all tested variable-outcome pairs.
+- **Stress tests** (`analyses/stress.py`) re-estimate a headline finding with the controls that stand for its obvious rival and re-grade it (`core.regrade`). Migration: net domestic migration on AIGE with state-by-year fixed effects, weighted by households, errors clustered by county, adding density, education, income, housing costs, January temperature, the 2016 vote and telework in turn, by period and by year. Exposure: the Republican share of an occupation's workers on each of ten exposure measures, adding education and wage, telework, gender and race shares, and occupation-group fixed effects in turn, and pairs of measures in one model. Structure: industries' actual partisanship and political balance (1 - |2p - 1|) against the values their occupational staffing predicts.
 
 Each finding carries a grade:
 
@@ -180,21 +188,15 @@ Each finding carries a grade:
 
 ## 8. What the first run found
 
-The first run used the VRscores report, the AIOE repository, DAIOE v1.0.0, IRS county migration 2012-13 to 2021-22 and the CSPP extract. The site's Findings tab always shows the latest run; the numbers below are from 25 September 2026.
+The first run used the VRscores report, the AIOE repository, DAIOE v1.0.0, IRS county migration 2012-13 to 2021-22 and the CSPP extract; the run of 28 September 2026 added the stress tests and their controls. The interactive lab always shows the latest run. The research report (`site/index.html`) sets every finding against the 2024-2026 literature; in brief:
 
-**1. Households are leaving AI-exposed counties, faster every year and within the same state (robust).** Across 3,130 counties, the household-weighted correlation between a county's AI exposure (AIGE) and its net domestic migration went from -0.19 (2012-13) to -0.51 (2020-21). The most exposed fifth of counties lost 0.16% of households a year at the start and 0.80% at the worst. Comparing counties within the same state, one standard deviation more exposure means -0.16 points a year in 2013-16 (t = -3.9), -0.56 in 2017-19 (t = -11.1) and -0.86 in 2020-22 (t = -13.6). The biggest losers are San Francisco, Boston's Suffolk County, Manhattan, the Bronx and Brooklyn; exposed Collin County, Texas, still gained 2.4% a year. *Question:* is this remote work and housing costs pulling knowledge workers out of dense cores, and does it carry AI-exposed work, and its politics, into less exposed and more Republican places? *Data to add:* county votes, remote-work shares and housing costs (ACS), movers' occupations.
+**Stress tests.**
 
-**2. AI exposure measures disagree about who is exposed (robust).** On the same 825 occupations, the worker-weighted correlation with the Republican share of workers runs from -0.18 (DAIOE generative AI) to +0.23 (Webb's AI patent score). Weighting occupations equally, benchmark and GPT measures sit near -0.32 and patent and automation measures near +0.25. Holding education and wage equal, Frey and Osborne's computerisation risk keeps a Republican lean (+2.0 points per SD, t = 2.5) and DAIOE's generative-AI score a Democratic one (-1.9, t = -2.7); within occupation groups, Webb's AI patent score leans Republican (+2.1, t = 2.3). The political incidence of "AI exposure" is a choice of measure. *Question:* which measure predicts what happens to workers since 2022, and do exposed occupations shift politically, as robot exposure did after 2016? *Data to add:* the VRscores occupation panel by year, OEWS 2019-2025.
+- *The "AI exodus" is mostly the partisan and telework geography of migration.* One SD more county AI exposure meant -0.86 points of households a year in 2020-22 within the same state (t = -13.6). With density, education, income, housing costs, January temperature, the 2016 vote and telework held equal, it is -0.11 (t = -2.2): 88% of the gradient goes. The controlled coefficient is small and flat from 2013 to 2022. What grew is the coefficient on the 2016 Republican vote share, from +0.33 (2013-16) to +0.74 (2020-22). The finding `mig-ai-exodus` is re-graded fragile.
+- *AI exposure's Democratic lean is composition; automation risk's Republican lean is not.* Generative-AI exposure (DAIOE) leans Democratic alone (-2.0 points of Republican share per SD, t = -3.3), but the lean disappears with gender and race shares (-0.1) and occupation groups (+0.1). Frey and Osborne's computerisation risk leans Republican with every control (+2.4, t = 4.0). Felten, Raj and Seamans's AIOE turns from a slight Democratic lean to a clear Republican one. The finding `occ-waves` is re-graded fragile.
+- *Most of an industry's partisanship, and half of its political balance, is the occupations it employs.* Across 178 industries, occupational staffing explains 72% of the variance in the Republican share and 54% of the variance in balance.
 
-**3. Interstate movers go to more Republican states, and the gap widened after 2019 (robust).** The average interstate move ends in a state whose last presidential vote was 0.8 points more Republican than the origin in 2012-13, 2.5 in 2020-21 and 2.2 in 2021-22; weighted by the income moved, 1.4 to 4.2 points. The political map is held at the 2016 election from 2017 on, so the widening comes from where people moved.
-
-**4. AI exposure looks Democratic across occupations, but the link runs through education (robust).** r = -0.30 across occupations; weighted by workers -0.03 (95% CI -0.15 to +0.08).
-
-**5. Households left states with liberal economic policy and AI-exposed jobs; at the state level the two are hard to separate (suggestive).** Net interstate migration correlates -0.75 with economic policy liberalism, -0.64 with income per capita, +0.62 with right-to-work laws. With policy liberalism and AIGE together, policy carries the association (-0.42 points a year per SD, t = -5.5; AIGE -0.05, t = -0.5), which is why the county comparison within states (finding 1) matters.
-
-**6. AI-exposed counties lose richer households than they gain (robust).** In the most exposed fifth of counties, households moving out report 3.6 thousand dollars more AGI per return than those moving in (2012-13) and 7.5 thousand more (2021-22); in the least exposed fifth, arrivals out-earn departures by 16.1 thousand in 2021-22.
-
-**7-26.** The VRscores findings of the earlier exploration carry on: education pulls occupations Democratic and pay Republican; partisans sort increasingly across employers but less across industries and occupations; AI-exposed industries lean Democratic mostly through education; big-tech workforces barely joined the Democratic drift; metros and states where party is inferred drift Democratic faster than registration states (a measurement regime effect); drift clusters in space along state lines; VRscores coverage is thin in New Jersey, Delaware, New Hampshire and Wyoming (an artifact of multi-state metros); and the largest employer drifts are restructured firms. DAIOE adds that dynamic exposure mostly rises for every occupation alike (levels in 2010 and 2024 correlate 0.98), and that occupations whose standing rose since 2012 have more Democratic workforces (r = -0.26). Movers trade down in county AI exposure, more so since 2020. The migration network splits into five regional communities; the 2021-22 corridors are led by California to Texas and New York to New Jersey and Florida.
+**Against the literature.** The migration findings (movers to Republican places, high earners leaving large counties) are documented; the Democratic lean of AI exposure is documented and runs through education; education pulling occupations Democratic and pay Republican is the "Brahmin left, merchant right" pattern; rising partisan sorting across employers is in Frake, Hurst and Kagan (2026) and the VRscores report; every VRscores drift is cohort replacement (party is fixed at 2024) and, where party is inferred, partly a measurement effect. The report argues that the frontier is at the level of the firm and sets out four research seams with the data and designs each needs.
 
 **Waiting for data**: AI adoption (BTOS) and AI patenting (PatentsView).
 
@@ -204,6 +206,7 @@ The first run used the VRscores report, the AIOE repository, DAIOE v1.0.0, IRS c
 - `results/findings.csv` and `results/linkage_diagnostics.csv`: the same findings and joins as flat tables.
 - `canonical/*.parquet` and `panels/*.parquet`: every intermediate table, for your own analyses (`pandas.read_parquet`, DuckDB or Polars).
 - `site/data/<table>.csv`: every table behind the charts.
+- `site/index.html`: the research report; `site/lab.html` and `site/polisy_lab_offline.html`: the interactive lab.
 
 ## 10. Regenerating the site
 
@@ -215,7 +218,9 @@ build_site()                                     # latest results -> LAB/site
 build_site("path/to/results.json", out="docs")   # any results file, any folder
 ```
 
-or `run_all(stages=("site",), fetch=False)`. `index.html` is self-contained apart from Plotly (pinned to version 4.1.1 on jsDelivr) and the Google fonts; `polisy_lab_offline.html` inlines Plotly from the installed Python package.
+or `run_all(stages=("site",), fetch=False)`. `index.html` (the report) is self-contained apart from the Google fonts; its figures are static SVG drawn with matplotlib. `lab.html` is self-contained apart from Plotly (pinned to version 4.1.1 on jsDelivr) and the fonts; `polisy_lab_offline.html` inlines Plotly from the installed Python package.
+
+**Editing the report.** The argument lives in `polisy_lab/report/report.md` and is yours to edit. Inside it, `<!-- figure: NAME -->` and `<!-- table: NAME -->` place a numbered figure or table (`report/figures.py`, `report/tables.py`), a line `Table: Caption` numbers the Markdown table after it, `{fig:NAME}` and `{tab:NAME}` become linked references, `[@key]` and `@key` become citations from `report/references.py`, and `{{finding-id.stat:format}}` inserts a number from a finding (for example `{{stress-mig.attenuation:.0%}}`). The novelty verdict of each finding is in `report/audit.py`. Figures, tables and those numbers are rebuilt at every build; the prose is not.
 
 ## 11. Extending the lab
 
@@ -243,14 +248,16 @@ A new chart kind is one renderer function in `site_assets/app.js` (`RENDER.<kind
 - Nothing here is causal. The designs (within-state comparisons, controls, fixed effects) rule out some explanations, not all.
 - VRscores from the report are a 2024 cross-section for occupations. Metro and state series come from the report's figures, and coverage varies by state.
 - Partisanship where party is inferred drifts differently from registered party; findings 11 and 18 measure this.
-- AIGE describes a county's 2019 jobs, not the people who move.
+- AIGE describes a county's 2019 jobs, not the people who move; the stress tests show it stands mostly for density, politics and telework.
+- The county controls of the stress tests come from a compiled source (JsonOfCounties), and telework is measured through each county's sector mix.
 - IRS counts households that file tax returns and misses non-filers; small county pairs are suppressed.
 - Most CSPP political variables end between 2014 and 2017.
 - Titles link occupations across classifications; about 12-16% of workers stay unlinked.
 
 ## 13. Reproducibility
 
-- Code versions: `polisy_lab` 0.1.0 (25 Sep 2026), `polisy_core` "2026-09-24 file finder". Tested with Python 3.11 (pandas 3.0) and 3.12 (pandas 2.2).
+- Code versions: `polisy_lab` 0.2.0 (28 Sep 2026), `polisy_core` "2026-09-24 file finder". Tested with Python 3.11 (pandas 3.0) and 3.12 (pandas 2.2).
+- No synthetic data are used anywhere; every test runs on real files and skips when they are missing.
 - Random seeds are fixed (bootstrap 20260925; clustering, layouts and isolation forests seeded).
 - Every run records its stages, versions and times in `results.json` (`run`), and every join's match rate.
 - The site pins Plotly 4.1.1.
@@ -266,3 +273,6 @@ A new chart kind is one renderer function in `site_assets/app.js` (`RENDER.<kind
 - Census Business Trends and Outlook Survey: https://www.census.gov/hfp/btos/data_downloads
 - PatentsView: https://patentsview.org/download/data-download-tables
 - Map shapes: US Census Bureau cartographic boundaries via us-atlas, https://github.com/topojson/us-atlas
+- Telework: Dingel, J. I., and Neiman, B. (2020), How many jobs can be done at home?, *Journal of Public Economics* 189, 104235; https://github.com/jdingel/DingelNeiman-workathome
+- County context: JsonOfCounties, https://github.com/evangambit/JsonOfCounties
+- County presidential returns 2016-2024 (compiled): https://github.com/tonmcg/US_County_Level_Election_Results_08-24
