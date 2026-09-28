@@ -63,9 +63,15 @@ REFS = {
     "fehder2024": dict(cite="Fehder et al.", year="2024", link="https://doi.org/10.1016/j.respol.2024.105034",
                        ref="Fehder, D. C., Teodoridis, F., Raffiee, J., & Lu, J. (2024). The partisanship of American inventors. "
                            "<i>Research Policy</i>, 53(7), 105034."),
-    "engelberg2025": dict(cite="Engelberg et al.", year="forthcoming", link="https://www.nber.org/papers/w31619",
-                          ref="Engelberg, J., Lu, R., Mullins, W., & Townsend, R. (forthcoming). Political sentiment and innovation: Evidence from "
-                              "patenters. <i>Review of Financial Studies</i> (NBER Working Paper 31619)."),
+    "engelberg2025": dict(cite="Engelberg et al.", year="2025", link="https://academic.oup.com/rfs/article/38/9/2718/8121164",
+                          ref="Engelberg, J., Lu, R., Mullins, W., & Townsend, R. (2025). Political sentiment and innovation: Evidence from "
+                              "patenters. <i>Review of Financial Studies</i>, 38(9), 2718&ndash;."),
+    "dossi2026": dict(cite="Dossi & Morando", year="2026", link="https://www.rfberlin.com/wp-content/uploads/2026/03/26064.pdf",
+                      ref="Dossi, G., & Morando, M. (2026). Polarized technologies (Working paper, version of 13 September 2026; earlier versions "
+                          "as CEP Discussion Paper 1969, 2023, and RFBerlin Discussion Paper 064/26, March 2026)."),
+    "chen2025": dict(cite="Chen & Gong", year="2025", link="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5666755", check="year not checked",
+                     ref="Chen, T., & Gong, R. K. (2025). Drawing partisan lines in innovation: Political polarization and U.S. inventor "
+                         "collaboration (SSRN Working Paper 5666755)."),
     "kempf2026": dict(cite="Kempf, Luo & Tsoutsoura", year="2026",
                       ref="Kempf, E., Luo, M., & Tsoutsoura, M. (2026). CEO ideology and global trade (Harvard Business School Working Paper 25-050)."),
     # ---------------------------------------------------------------- AI exposure and its politics

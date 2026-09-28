@@ -1,6 +1,6 @@
 # POLISY site
 
-Built 2026-09-28 12:32 by polisy_lab 0.2.0 (2026-09-28).
+Built 2026-09-28 13:38 by polisy_lab 0.2.0 (2026-09-28).
 
 - `index.html`: the research report (static figures and tables; no scripts).
 - `lab.html`: the interactive lab, the report's appendix (Plotly loads from jsDelivr).

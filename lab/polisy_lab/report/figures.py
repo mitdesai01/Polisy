@@ -124,8 +124,8 @@ def fig_seam(res):
     caption = "The research seam: from politics, through organisations, to innovation and technology."
     notes = ("The dashed arc is what the first run linked: workforce partisanship and the political environment against AI exposure and "
              "migration, with occupations, industries, counties and states standing in for firms. The numbered arrows are the four seams of "
-             "Section 5: (1) structural and elective partisanship; (2) who decides and who is exposed; (3) politics and the direction of AI "
-             "invention; (4) technology reshaping the political composition of firms. Grey arrows are the links the seams build on.")
+             "Section 5: (1) structural and elective partisanship; (2) who decides and who is exposed; (3) whether leaders or inventors "
+             "direct invention; (4) technology reshaping the political composition of firms. Grey arrows are the links the seams build on.")
     return "\n".join(o), caption, notes
 
 

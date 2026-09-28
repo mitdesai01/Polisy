@@ -5,7 +5,7 @@
 - **The "AI exodus" is not about AI.** Households did leave AI-exposed counties, and faster every year, but {{stress-mig.attenuation:.0%}} of the 2020–22 gradient disappears once density, education, income, housing costs, climate, the 2016 vote and telework are held equal. What grew after 2016 is the partisan and telework gradient of migration ({fig:mig-years}).
 - **AI exposure's Democratic lean is composition.** Generative-AI exposure leans Democratic only because of who holds the exposed jobs: once education, pay, telework, gender and race are held equal, it leans neither way. Routine-automation risk is different: it leans Republican net of all of these and of occupation group ({fig:occ-models}).
 - **Most of what looks like organisational ideology is occupational structure.** The occupations an industry employs account for {{stress-structure.r2_share:.0%}} of the variance in its partisanship and {{stress-structure.r2_balance:.0%}} of the variance in its political balance ({fig:structure}).
-- **The frontier is at the level of the firm**, which the first run never reached. Four seams look open and fit your projects: structural versus elective partisanship in organisations; the political distance between those who decide on AI and those whose work it touches; politics and the direction of AI invention; and technology as a force that reshapes the political composition of firms (Section 5).
+- **The frontier is at the level of the firm**, which the first run never reached. Four seams look open and fit your projects: structural versus elective partisanship in organisations; the political distance between those who decide on AI and those whose work it touches; whether leaders or inventors set the direction of invention when their politics differ; and technology as a force that reshapes the political composition of firms (Section 5).
 </div>
 
 ## 1. What POLISY is, and where it sits
@@ -171,34 +171,37 @@ Towards causality
 First paper
 :   *Who decides, who is exposed: political distance and the adoption of AI.* The AI-era extension of P1. Outlets: Strategic Management Journal, Organization Science, Management Science.
 
-### 5.3 Seam 3: Politics and the direction of AI invention
+### 5.3 Seam 3: Who directs the direction of invention?
 
 Question
-:   Do the politics of a firm's inventors and leaders shape which AI it invents? Does it build technologies that replace labour or augment it? Does it build for applications with partisan salience, such as surveillance, defence, content moderation, climate or health?
+:   When a firm's leaders and its inventors differ politically, whose views set the direction of the firm's invention? And does the direction of AI invention follow politics even though AI carries no party label, through whose work it automates?
 
 Builds on
-:   The direction of technical change [@acemoglu2020; @autor2024]; inventors' partisanship and the direction of invention [@fehder2024]; political sentiment and patenting [@engelberg2025]; CEO ideology and breakthroughs [@kiss2026]; whether artefacts have politics [@winner1980]. P2's positioning already argues for direction over volume.
+:   Inventors' party and the direction of invention [@dossi2026; @fehder2024]; political sentiment and patenting [@engelberg2025]; partisan lines in inventor collaboration [@chen2025]; CEO ideology and inventiveness [@kiss2026]; ideological misfit and exit [@bermiss2018]; co-partisan hiring [@colonnelli2025]; the direction of technical change [@acemoglu2020; @autor2024]. P2's positioning already argues for direction over volume.
+
+What is already known
+:   @dossi2026 settle the question at the level of the inventor. They link about 95,600 inventors in four closed-primary states to voter files. Democrats are 31% more likely than Republicans to patent green technologies and 35% more likely to patent women's-health technologies; they are 39% less likely to patent weapons. The gaps are not explained by ability or skills, they widened through 2015 and have stayed wide since, and they carry into citations. Asking whether partisan inventors pursue partisan-coded AI (climate AI, health AI, defence AI) would repeat their design on a new technology class.
 
 What is missing
-:   Evidence on AI. @engelberg2025 find that partisans cluster in technologies: Democrats in biotechnology, Republicans in weapons. @fehder2024 link inventor partisanship to invention on guns and climate. No study asks whether the automation–augmentation direction of AI invention follows the politics of those who invent or direct it. Section 3.2 shows why it matters: the capability AI targets decides which political constituency bears the exposure.
+:   Two things their design leaves open. The first is organisations. Adding organisation fixed effects removes 38–42% of the green and weapons gaps, and they treat that share as a robustness check rather than a question. Nobody asks whether leaders' politics steer the firm's portfolio, or how a contest between leaders and inventors over direction is resolved: by reassignment, exit or voice. The second is technologies without a party label. They restrict attention to issues with a clear party position and a clear mapping to patents, and note that other politically relevant technologies are harder to identify. AI is the leading case. It has no stable party position, but it carries partisan weight through incidence, meaning whose work it replaces, which is exactly what POLISY measures (Section 3.2).
 
 What POLISY adds
-:   Exposure mapped to occupations and parties; PatentsView adapters that are written but not yet run; county and state panels for the geography of AI invention.
+:   Occupation partisanship and exposure on one crosswalk, which turns any patent mapped to occupations into a measure of whose work it targets. Also VRscores employer composition, DIPI for leaders, and PatentsView adapters written but not yet run. Their data recipe can be replicated: closed-primary voter files for Florida, New Jersey, New York and Pennsylvania, matched to PatentsView on name and city (53% of patents).
 
 Rival explanations
-:   Technological opportunity by field; firm specialisation; government and defence procurement; venture funding; location; team education.
+:   Organisational specialisation: when firms specialise, organisation effects absorb technology, as @dossi2026 note. Also customers and procurement, especially defence contracts; location; and reverse selection, where weapons firms attract Republican leaders.
 
 Data and design
-:   PatentsView and the USPTO AI Patent Dataset. Automation versus augmentation from patent text, using the linkage method of @autor2024 or a classifier over claims, which plays to your NLP skills. Inventor partisanship from voter files [@fehder2024] or donations. DIPI for leaders and DISCERN for firms.
+:   Firm portfolios from DISCERN, inventor party from the four-state voter files, and leader ideology from DIPI. The core design uses CEO successions with the inventor team held fixed. Does the firm's share of green, weapons and contested-AI patents move toward the new leader's politics? Do misaligned inventors leave or switch domains? For AI, map each patent to the occupations whose tasks it performs [@webb2020; @autor2024] and weight by their partisanship. Do inventors and firms automate out-partisans' work more readily?
 
 Mechanisms
-:   Values decide which problems seem worth solving. Other mechanisms are expectations of partisan regulation, customers and funders, and identity within inventor teams.
+:   Managerial discretion over the R&D portfolio set against bottom-up idea generation; misfit exit; and, for incidence, out-group discounting [@iyengar2019].
 
 Towards causality
-:   Inventors who move between firms whose leaders differ politically, to see whether the direction of their invention changes. Elections as shocks to political sentiment [@engelberg2025]. Team composition instrumented by the partisanship of the local inventor labour market.
+:   Stacked difference-in-differences around exogenous CEO departures. Inventors who move between firms whose leaders differ politically. For AI subdomains whose politicisation can be dated, event studies of alignment as the coding emerges: facial recognition after the 2020 moratoria, military AI after the 2026 disputes over defence contracts.
 
 First paper
-:   *The partisan direction of AI invention.* A bridge between P2 and your STS stream. Outlets: Research Policy, Strategic Management Journal, Management Science.
+:   *Who directs the direction? Leader and inventor politics in the firm's technological portfolio.* This is the upper-echelons contribution that @dossi2026 leave open, and a natural home for P1's incongruence argument. Outlets: Strategic Management Journal, Academy of Management Journal, Research Policy. The AI-incidence question is a second, riskier paper.
 
 ### 5.4 Seam 4: Technology and the political composition of firms
 
@@ -235,7 +238,7 @@ Table: The four seams compared (as of September 2026)
 |---|---|---|---|---|
 | 1. Structural vs elective partisanship | Extends segregation research into management constructs | @frake2026; @castiglia2025 | High, once firm occupation mix is added | Read as a methods note unless the reanalysis changes a published result |
 | 2. Who decides, who is exposed | Open | @chu2026; @bloom2026 | Medium: needs AI-adoption data | Others extend CEO-level work to the workforce first |
-| 3. Direction of AI invention | Open for AI | @fehder2024; @engelberg2025 | Medium-low: inventor party is costly | Inventor matching; patent lags |
+| 3. Who directs the direction | Answered for inventors by @dossi2026; open for leaders and for AI coded by incidence | @dossi2026; @fehder2024; @engelberg2025 | Medium: replicate the four-state voter-file match; DIPI for leaders | Read as Dossi & Morando plus CEOs unless leader turnover identifies the contest |
 | 4. Technology → political composition | Open; new theory | @amr2025; @autor2020 | Medium: VRscores plus occupation flows | Short window since 2022 |
 
 **What not to pursue.** Migration and AI is not a POLISY paper: the field is crowded, the exposure measure is a proxy, and the IRS files cannot see who moves. Use migration only as a source of variation. For example, remote-work inflows of Democratic-leaning professionals into Sun Belt metros shift the partisanship of local labour pools, a possible shock to firm composition in Seam 1. Inflows also bring education, so the design must hold it equal.
@@ -252,8 +255,8 @@ Table: Data that would move POLISY to the level of the firm
 | Firm × occupation × location headcounts (Revelio positions) | Seam 1 baseline; Seam 2 exposure; Seam 4 flows | WRDS (check the Groningen licence) or a Revelio academic licence | 1 |
 | DIPI: CEO, top-team and board ideology | Seams 2, 3; P1 | In hand | 1 |
 | Firm AI adoption: AI job-posting shares; USPTO AI Patent Dataset; AI mentions in 10-Ks (EDGAR full text) and earnings calls | Seams 2, 4 | Postings via WRDS or Lightcast; EDGAR and USPTO free; transcripts via WRDS | 1 |
-| PatentsView, AI patents and claims text, with an automation-versus-augmentation classifier | Seam 3 | Free; compute and validation | 2 |
-| Inventor partisanship: voter-file match or FEC donations | Seam 3 | L2 (paid) or FEC (free, sparser) | 2 |
+| PatentsView, with patents mapped to the occupations whose tasks they perform [@webb2020; @autor2024] and firms linked through DISCERN | Seam 3 | Free; compute and validation | 2 |
+| Inventor partisanship: closed-primary voter files (Florida, New Jersey, New York, Pennsylvania) matched on name and city, as in @dossi2026; donations (DIME) for other states | Seam 3; P1; P2 | State voter files are public or low-cost; DIME is free | 2 |
 | Occupation × metro partisanship | Holds geography equal in Seam 1 and in Section 3.2 | Ask the VRscores authors; or L2 with Revelio | 2 |
 | Worker-level party, occupation and AI use (Cooperative Election Study; Gallup Workforce Panel) | Mechanisms for Seam 2 | CES free; Gallup restricted | 3 |
 | Voice and exit: NLRB petitions, WARN notices, Glassdoor reviews | Outcomes for Seams 2 and 4 | Free, except Glassdoor | 3 |
@@ -268,7 +271,7 @@ A sequence that builds each step on the last:
 1. **Now: a short research note on the partisan face of AI exposure** (Section 3.2), for Research & Politics, Socius or PNAS Nexus. It needs no new data, and its contribution is the asymmetry between waves and the measure-dependence. Check its overlap with @bloom2026 before writing.
 2. **Next six to nine months: Seam 1.** It is the foundation for P1 and for Seams 2 and 4, and it needs one data addition, firm occupation mix.
 3. **Then Seam 2 or Seam 4.** Both use the same firm panel; Seam 2 extends P1 into AI, and Seam 4 has the stronger claim to a new theory.
-4. **In parallel with P2: Seam 3.** It shares P2's patent infrastructure and its claim about direction, and it connects to your STS stream.
+4. **In parallel with P2: Seam 3.** Start by replicating the four-state inventor–voter match of @dossi2026, which P1 and P2 need anyway. Then ask the question they leave open: whether leaders or inventors set the firm's direction. It shares P2's patent infrastructure and its claim about direction.
 
 ## 8. Data and methods
 
@@ -303,11 +306,13 @@ Table: Additions to the Literature tab, by stream
 | @antoniades2025 | Polarisation & party systems | General | Electoral effects of local AI adoption |
 | @magistro2026 | Political psychology & neuroscience of ideology | Micro leg | Common attitudes toward AI and globalisation |
 | @chueri2026 | Polarisation & party systems | General | How parties frame AI and work in 33 parliaments |
+| @dossi2026 | Innovation measurement & science of science | P2 | Inventors' party shapes what they invent and cite; the benchmark Seam 3 must go beyond |
+| @chen2025 | Innovation search, recombination & networks | P2 | Collaboration between Democratic and Republican inventors fell after 2016 |
 | @engelberg2025 | Innovation measurement & science of science | P2 | Political sentiment and patenting; partisans cluster by technology |
 | @felten2021 | Innovation measurement & science of science | General | AIOE, AIIE and AIGE; in SMJ, so the exposure measure management readers know |
 | @webb2020 | Innovation measurement & science of science | P2 | Patent-based exposure; AI targets high-skill tasks |
 | @eloundou2024 | Innovation measurement & science of science | General | Language-model exposure |
-| @autor2024 | Innovation search, recombination & networks | P2 | Augmentation versus automation innovations; the classifier for Seam 3 |
+| @autor2024 | Innovation search, recombination & networks | P2 | Links patents to the occupations they affect; the incidence measure for Seam 3 |
 | @acemoglu2020 | Comparative political economy of innovation | P2 | The direction of AI as a choice |
 | @kurer2020 | Polarisation & party systems | General | Routine workers, status decline and the populist right |
 | @anelli2021 | Polarisation & party systems | General | Individual robot exposure and radical-right support |
