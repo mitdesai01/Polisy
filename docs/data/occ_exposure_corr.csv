@@ -1,0 +1,14 @@
+measure,r_workers,r_occupations
+AIOE (all applications),-0.03141,-0.2953
+Language-model AIOE,-0.09393,-0.3704
+Image-generation AIOE,0.03315,-0.1004
+Strategy games,0.01625,-0.2255
+Video games,0.1522,0.03072
+Image recognition,0.1482,0.09825
+Visual Q&A,0.1029,-0.09588
+Image generation,0.03315,-0.1004
+Reading comprehension,-0.08058,-0.3511
+Language modeling,-0.09393,-0.3704
+Translation,-0.09354,-0.3701
+Speech recognition,-0.06372,-0.3462
+Music recognition,-0.005834,-0.255

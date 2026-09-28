@@ -1,0 +1,16 @@
+variable,column,n,r_net,lo,hi,r_net_2020_22,r_income_gap
+Economic policy liberalism (Caughey and Warshaw),env_policyeconlib_est,50,-0.7498,-0.8636,-0.4988,-0.8131,-0.6013
+Income per capita ($),env_incomepcap,51,-0.637,-0.7762,-0.404,-0.6956,-0.4902
+Public economic liberalism (Caughey and Warshaw),env_masseconlib_est,50,-0.6308,-0.7762,-0.3439,-0.7136,-0.4849
+Social policy liberalism (Caughey and Warshaw),env_policysociallib_est,50,-0.6305,-0.7548,-0.4038,-0.7387,-0.528
+State government ideology (0 conservative to 100 liberal),env_inst6014_nom,50,-0.6013,-0.7636,-0.2976,-0.7115,-0.5488
+Top corporate income tax rate (%),env_x_top_corporateincometaxrate,51,-0.5646,-0.7146,-0.4084,-0.5093,-0.4429
+"Democratic control of state government (Ranney index, 0-1)",env_ranney4_control,49,-0.5624,-0.7299,-0.238,-0.679,-0.5526
+AI exposure of jobs (AIGE),aige,51,-0.5441,-0.7318,-0.2195,-0.609,-0.4729
+Median household income ($),env_hincomemed,51,-0.5109,-0.6603,-0.2981,-0.5746,-0.4825
+Adults with a college degree (%),env_perc_college,50,-0.4328,-0.6211,-0.1584,-0.5094,-0.394
+Public social liberalism (Caughey and Warshaw),env_masssociallib_est,50,-0.4316,-0.6648,-0.07824,-0.5468,-0.2625
+Unemployment rate (%),env_unemployment,51,-0.1744,-0.4207,0.2249,-0.2461,-0.1583
+Republican share of the last presidential vote (%),env_propgoppres,50,0.5837,0.3125,0.7496,0.6745,0.4258
+Republican share of state legislators (%),env_propgopleg,49,0.6109,0.3433,0.7428,0.7149,0.5102
+Right-to-work law (1 = yes),env_grtw,50,0.6187,0.3393,0.7682,0.6822,0.6028

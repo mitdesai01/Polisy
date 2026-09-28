@@ -18,7 +18,7 @@ Three rules shape the design:
 
 The lab runs in a Colab notebook (`notebooks/POLISY_AI_Innovation_Lab.ipynb`, or the same code as a script in `notebooks/polisy_lab_colab.py`). It needs:
 
-- **The code**: `POLISY_lab_code.zip`, which holds `POLISY_DA/` (the file finder `polisy_core.py` and modules 01-10) and `lab/` (the `polisy_lab` package, this report, the notebook and tools).
+- **The code**: the `polisy` repository (https://github.com/mitdesai01/polisy), which holds `POLISY_DA/` (the file finder `polisy_core.py` and modules 01-10) and `lab/` (the `polisy_lab` package, this report, the notebook and tools). On GitHub, Code → Download ZIP gives it as one zip (`polisy-main.zip`); `POLISY_lab_code.zip` holds the same two folders.
 - **Your data files**, under any names, in one Drive folder (for example `MyDrive/POLISY/data`). The first run used these:
 
 | Dataset | Files used in the first run | Needed for |
@@ -35,7 +35,7 @@ Optional sources the lab uses when present: county presidential returns and the 
 
 ### Step 1. Put the files in Drive
 
-Create `MyDrive/POLISY/` with a `data/` folder inside. Put your downloads in `data/` as they came: zips do not need unpacking and names do not need changing. Upload `POLISY_lab_code.zip` to `MyDrive/POLISY/` (or to the Colab file panel).
+Create `MyDrive/POLISY/` with a `data/` folder inside. Put your downloads in `data/` as they came: zips do not need unpacking and names do not need changing. Upload the code zip (`polisy-main.zip` from GitHub, or `POLISY_lab_code.zip`) to `MyDrive/POLISY/` or to the Colab file panel, as it is. Without a zip, the notebook clones the repository (a private repository needs a token in the URL).
 
 ### Step 2. Open the notebook and run Setup
 

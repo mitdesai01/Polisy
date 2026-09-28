@@ -1,0 +1,11 @@
+model,term,coef,lo,hi,t,n,r2
+AIIE only,AI exposure (AIIE),-2.492,-4.148,-0.8357,-2.949,246,0.1183
+"+ education, wage",AI exposure (AIIE),-0.8815,-2.265,0.5024,-1.248,246,0.476
+"+ education, wage",Education of the workforce,-5.049,-6.046,-4.053,-9.93,246,0.476
+"+ education, wage",Median wage (log),4.689,3.389,5.989,7.069,246,0.476
++ sector,AI exposure (AIIE),-1.733,-3.501,0.03418,-1.922,246,0.6754
++ sector,Education of the workforce,-2.878,-5.209,-0.5463,-2.419,246,0.6754
++ sector,Median wage (log),2.476,0.8952,4.057,3.07,246,0.6754
+language-model AIIE + all,Language-model AIIE,-2.471,-4.661,-0.2822,-2.213,246,0.6817
+language-model AIIE + all,Education of the workforce,-2.355,-4.9,0.189,-1.814,246,0.6817
+language-model AIIE + all,Median wage (log),2.38,0.8269,3.933,3.004,246,0.6817

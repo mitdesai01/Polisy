@@ -1,0 +1,11 @@
+measure,variable,family,n,r_workers,lo,hi,r_occupations,coef_raw,t_raw,coef_ctrl,t_ctrl,coef_fe,t_fe
+"DAIOE, generative AI",exp_cumul_genai,AI benchmarks,825,-0.1835,-0.2852,-0.06947,-0.3662,-1.973,-3.267,-1.866,-2.66,-1.563,-1.426
+"DAIOE, all applications",exp_cumul,AI benchmarks,825,-0.1614,-0.282,-0.03243,-0.2935,-1.522,-2.462,-1.085,-1.832,-0.7242,-0.8036
+"GPT exposure, direct (Eloundou et al.)",open24_human_E1,Language models,821,-0.1295,-0.288,0.04107,-0.334,-1.075,-1.497,-0.3397,-0.4764,-0.6794,-1.246
+"AIOE (Felten, Raj & Seamans)",frs21_aioe,AI benchmarks,825,-0.03692,-0.1546,0.07265,-0.3327,-0.4503,-0.649,-0.4455,-0.6262,0.2641,0.2481
+GPT automation potential (Eloundou et al.),open24_gpt_automation,Language models,821,-0.01355,-0.1156,0.08832,-0.2858,-0.1549,-0.2584,-0.3944,-0.7286,-0.3784,-0.4847
+GPT exposure with tools (Eloundou et al.),open24_human_E1_E2,Language models,821,-0.01018,-0.1472,0.1367,-0.3245,-0.1145,-0.1386,-0.7372,-0.7767,-1.053,-0.8113
+Robot patents (Webb),webb19_robot_score,Patents,824,0.06344,-0.02658,0.1574,0.2869,1.031,1.32,0.2311,0.2658,0.446,0.3915
+Computerisation risk (Frey & Osborne),fo17_p_computerisation,Routine automation,722,0.09932,-0.06617,0.2651,0.2056,0.8795,1.173,2.019,2.503,1.853,2.771
+Software patents (Webb),webb19_software_score,Patents,824,0.1448,0.003745,0.287,0.293,1.852,1.852,-0.05539,-0.05899,0.9506,1.043
+AI patents (Webb),webb19_ai_score,Patents,824,0.2336,0.03036,0.4265,0.2117,2.258,2.283,1.419,1.75,2.059,2.282

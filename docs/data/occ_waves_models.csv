@@ -1,0 +1,31 @@
+model,term,coef,lo,hi,t,n
+Measure alone,"AIOE (Felten, Raj & Seamans)",-0.4503,-1.81,0.9098,-0.649,825
+"+ education, wage","AIOE (Felten, Raj & Seamans)",-0.4455,-1.84,0.949,-0.6262,674
++ occupation group,"AIOE (Felten, Raj & Seamans)",0.2641,-1.822,2.351,0.2481,674
+Measure alone,"DAIOE, all applications",-1.522,-2.733,-0.3105,-2.462,825
+"+ education, wage","DAIOE, all applications",-1.085,-2.247,0.07609,-1.832,674
++ occupation group,"DAIOE, all applications",-0.7242,-2.49,1.042,-0.8036,674
+Measure alone,"DAIOE, generative AI",-1.973,-3.157,-0.7894,-3.267,825
+"+ education, wage","DAIOE, generative AI",-1.866,-3.241,-0.491,-2.66,674
++ occupation group,"DAIOE, generative AI",-1.563,-3.711,0.5856,-1.426,674
+Measure alone,"GPT exposure, direct (Eloundou et al.)",-1.075,-2.483,0.3322,-1.497,821
+"+ education, wage","GPT exposure, direct (Eloundou et al.)",-0.3397,-1.737,1.058,-0.4764,673
++ occupation group,"GPT exposure, direct (Eloundou et al.)",-0.6794,-1.748,0.3892,-1.246,673
+Measure alone,GPT exposure with tools (Eloundou et al.),-0.1145,-1.733,1.504,-0.1386,821
+"+ education, wage",GPT exposure with tools (Eloundou et al.),-0.7372,-2.598,1.123,-0.7767,673
++ occupation group,GPT exposure with tools (Eloundou et al.),-1.053,-3.596,1.491,-0.8113,673
+Measure alone,GPT automation potential (Eloundou et al.),-0.1549,-1.329,1.02,-0.2584,821
+"+ education, wage",GPT automation potential (Eloundou et al.),-0.3944,-1.456,0.6666,-0.7286,673
++ occupation group,GPT automation potential (Eloundou et al.),-0.3784,-1.908,1.152,-0.4847,673
+Measure alone,AI patents (Webb),2.258,0.3194,4.197,2.283,824
+"+ education, wage",AI patents (Webb),1.419,-0.1699,3.009,1.75,674
++ occupation group,AI patents (Webb),2.059,0.2902,3.828,2.282,674
+Measure alone,Software patents (Webb),1.852,-0.1082,3.812,1.852,824
+"+ education, wage",Software patents (Webb),-0.05539,-1.896,1.785,-0.05899,674
++ occupation group,Software patents (Webb),0.9506,-0.8361,2.737,1.043,674
+Measure alone,Robot patents (Webb),1.031,-0.4993,2.561,1.32,824
+"+ education, wage",Robot patents (Webb),0.2311,-1.473,1.935,0.2658,674
++ occupation group,Robot patents (Webb),0.446,-1.787,2.679,0.3915,674
+Measure alone,Computerisation risk (Frey & Osborne),0.8795,-0.59,2.349,1.173,722
+"+ education, wage",Computerisation risk (Frey & Osborne),2.019,0.438,3.601,2.503,611
++ occupation group,Computerisation risk (Frey & Osborne),1.853,0.5424,3.165,2.771,611

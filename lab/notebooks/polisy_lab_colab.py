@@ -12,7 +12,8 @@
 # 1. In Google Drive, make a folder `POLISY` with a folder `data` inside it.
 # 2. Put your downloads in `POLISY/data` as they came. Zips are fine and names do not matter: the VRscores report,
 #    `daioe-v1.0.0-scores.zip`, the IRS county migration zip, the CSPP file.
-# 3. Put `POLISY_lab_code.zip` in `POLISY` (or upload it to the Colab file panel).
+# 3. Put the code in `POLISY`: on GitHub, Code → Download ZIP on the polisy repository, and upload the zip as it is
+#    (or `POLISY_lab_code.zip`, or leave it out and the notebook clones the repository).
 #
 # Each step below is one cell; run them in order. The technical report (`lab/docs/TECHNICAL_REPORT.md`, also the site's
 # Methods tab) explains every stage, dataset and link.
@@ -38,19 +39,21 @@ DATA = BASE / "data"                                        # your downloads: se
 os.environ["POLISY_LAB_ROOT"] = str(BASE / "lab")           # everything the lab writes (kept in Drive)
 os.environ.setdefault("POLISY_ROOT", "/content/polisy")     # POLISY_DA's own outputs, as in the POLISY_Lab notebook
 
+# The code: GitHub's "Download ZIP" of the polisy repository (polisy-main.zip) or POLISY_lab_code.zip, in the POLISY
+# folder or the Colab file panel. Without a zip it is cloned from GitHub (a private repository needs a token in the URL).
+REPO = "https://github.com/mitdesai01/polisy"
 CODE = Path("/content/polisy_code")
-found = [p for p in (BASE / "POLISY_lab_code.zip", Path("/content/POLISY_lab_code.zip")) if p.exists()]
+is_code = lambda p: p.name.lower() in ("polisy_lab_code.zip", "polisy.zip") or p.name.lower().startswith("polisy-main")
+found = sorted((p for d in (BASE, Path("/content")) if d.exists() for p in d.glob("*.zip") if is_code(p)), key=lambda p: p.stat().st_mtime)
 if found:
     shutil.rmtree(CODE, ignore_errors=True)
-    zipfile.ZipFile(found[0]).extractall(CODE)
-elif not (CODE / "lab").exists():                            # no zip: take the code from GitHub
-    subprocess.run(["git", "clone", "--depth", "1", "--branch", "claude/dipi-cbsa-reference-lookup-bx46cx",
-                    "https://github.com/mitdesai01/literature-universe", "/content/literature-universe"], check=True)
-    shutil.copytree("/content/literature-universe/polisy/POLISY_DA", CODE / "POLISY_DA")
-    shutil.copytree("/content/literature-universe/polisy/lab", CODE / "lab")
+    zipfile.ZipFile(found[-1]).extractall(CODE)
+elif not (CODE.exists() and any(CODE.rglob("polisy_core.py"))):
+    subprocess.run(["git", "clone", "--depth", "1", REPO, str(CODE)], check=True)
+core_file = next(CODE.rglob("polisy_core.py"))              # the zip may wrap everything in one top folder
 for name in [m for m in sys.modules if m.startswith(("polisy_core", "polisy_lab"))]:
     del sys.modules[name]                                   # never keep an older copy loaded
-sys.path[:0] = [str(CODE / "POLISY_DA"), str(CODE / "lab")]
+sys.path[:0] = [str(core_file.parent), str(core_file.parent.parent / "lab")]
 
 import polisy_core as pc
 import polisy_lab

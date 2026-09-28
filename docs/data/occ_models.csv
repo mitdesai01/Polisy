@@ -1,0 +1,17 @@
+model,term,coef,lo,hi,t,n,r2
+AIOE only,AI exposure (AIOE),-0.3932,-1.834,1.048,-0.5348,698,0.0009865
+"+ wage, education",AI exposure (AIOE),-0.2194,-1.565,1.126,-0.3196,614,0.3401
+"+ wage, education",Median wage (log),6.132,4.551,7.713,7.602,614,0.3401
+"+ wage, education",Required education,-8.057,-9.755,-6.359,-9.299,614,0.3401
+"+ gender, race, occupation group",AI exposure (AIOE),3.306,0.9912,5.621,2.799,292,0.6759
+"+ gender, race, occupation group",Median wage (log),0.554,-1.754,2.862,0.4704,292,0.6759
+"+ gender, race, occupation group",Required education,-4.62,-7.677,-1.563,-2.962,292,0.6759
+"+ gender, race, occupation group",Female share,-7.009,-8.97,-5.048,-7.005,292,0.6759
+"+ gender, race, occupation group",White share,3.167,1.774,4.56,4.456,292,0.6759
+"perception vs language, alone",Perception vs language exposure,2.361,0.7041,4.019,2.793,698,0.0491
+perception vs language + controls + group,Perception vs language exposure,-0.6106,-2.21,0.9886,-0.7484,292,0.6763
+perception vs language + controls + group,General AI exposure (component 1),3.33,0.9859,5.674,2.784,292,0.6763
+perception vs language + controls + group,Median wage (log),0.6034,-1.668,2.875,0.5206,292,0.6763
+perception vs language + controls + group,Required education,-4.665,-7.743,-1.586,-2.97,292,0.6763
+perception vs language + controls + group,Female share,-7.034,-9.194,-4.873,-6.381,292,0.6763
+perception vs language + controls + group,White share,3.172,1.781,4.563,4.469,292,0.6763

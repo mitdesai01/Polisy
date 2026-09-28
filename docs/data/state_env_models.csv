@@ -1,0 +1,9 @@
+model,term,coef,lo,hi,t,n
+Policy liberalism + AIGE,Economic policy liberalism (Caughey and Warshaw),-0.4199,-0.5698,-0.2699,-5.488,50
+Policy liberalism + AIGE,AI exposure of jobs (AIGE),-0.04744,-0.2238,0.1289,-0.5272,50
+"+ corporate tax, college share",Economic policy liberalism (Caughey and Warshaw),-0.3198,-0.516,-0.1235,-3.193,50
+"+ corporate tax, college share",AI exposure of jobs (AIGE),-0.1957,-0.3822,-0.009157,-2.056,50
+"+ corporate tax, college share",Top corporate income tax rate (%),-0.16,-0.2725,-0.04751,-2.788,50
+"+ corporate tax, college share",Adults with a college degree (%),0.1305,-0.02596,0.287,1.635,50
+Republican presidential share + AIGE,Republican share of the last presidential vote (%),0.3019,0.12,0.4837,3.253,50
+Republican presidential share + AIGE,AI exposure of jobs (AIGE),-0.2158,-0.4085,-0.02309,-2.195,50

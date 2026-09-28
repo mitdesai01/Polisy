@@ -1,0 +1,11 @@
+group,employers,workers,rep_share,change_pp,share_drift_rep,share_drift_dem
+Health care,520.0,979900.0,0.4043,-5.524,0.02308,0.4596
+Defense & aerospace,21.0,227100.0,0.505,-5.0,0.0,0.4286
+Finance & insurance,220.0,802800.0,0.4567,-4.994,0.02273,0.4318
+Consulting & accounting,9.0,126100.0,0.3573,-4.496,0.0,0.3333
+Retail & hospitality,58.0,329400.0,0.3966,-4.347,0.03448,0.2414
+State & local government,362.0,391400.0,0.3562,-4.321,0.01105,0.4116
+Other,3902.0,5644000.0,0.4406,-4.187,0.05126,0.3711
+Military & federal,167.0,517300.0,0.4501,-3.082,0.0,0.3413
+Higher education,707.0,1136000.0,0.3123,-2.138,0.06223,0.1528
+AI & big tech,34.0,421300.0,0.3179,-1.079,0.05882,0.1471

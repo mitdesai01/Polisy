@@ -146,8 +146,21 @@ def _file_name(p):
     return Path(p).name + (f" :: {member}" if member else "")
 
 
-def _payload(res):
+def _public(res):
+    """The results as published next to the site: file names instead of local folders."""
     R = json.loads(json.dumps(res, default=str))
+    for meta in R.get("catalog", {}).values():
+        for role in meta.get("roles", []):
+            role["paths"] = "; ".join(_file_name(x.strip()) for x in str(role.get("paths") or "").split(";") if x.strip())
+    for v in (R.get("profiles") or {}).values():
+        if isinstance(v, dict) and "file" in v:
+            v["file"] = _file_name(v["file"])
+    R["run"] = {k: v for k, v in (R.get("run") or {}).items() if k != "lab_root"}
+    return R
+
+
+def _payload(res):
+    R = _public(res)
     counties = json.loads((ASSETS / "us_county_xy.json").read_text())["points"]
     for d in R.get("datasets", {}).values():
         if "_x" in d["columns"]:
@@ -162,21 +175,15 @@ def _payload(res):
                 p = counties.get(str(r.get("county_fips") or "").zfill(5))
                 r["_x"], r["_y"] = (p[0], p[1]) if p else (None, None)
             d["columns"] = d["columns"] + ["_x", "_y"]
-    for meta in R.get("catalog", {}).values():
-        for role in meta.get("roles", []):
-            role["paths"] = "; ".join(_file_name(x.strip()) for x in str(role.get("paths") or "").split(";") if x.strip())
     for k in list(R.get("datasets", {})):
         R["datasets"][k] = _columnar(R["datasets"][k])
     prof = {}
     for k, v in (R.get("profiles") or {}).items():
         v = dict(v)
-        if "file" in v:
-            v["file"] = _file_name(v["file"])
         if "fields" in v:
             v["fields"] = v["fields"][:120]
         prof[k] = v
     R["profiles"] = prof
-    R["run"] = {k: v for k, v in (R.get("run") or {}).items() if k != "lab_root"}
     from .adapters.politics import CSPP_CURATED
     R["labels"] = {**LABELS, **{"cspp_" + k: v for k, v in CSPP_CURATED.items()}, **{"env_" + k: v for k, v in CSPP_CURATED.items()}}
     R["grades"] = GRADES
@@ -322,7 +329,7 @@ def build_site(results=None, out=None, offline=True, csv=True, fragment=None):
     if fragment:
         Path(fragment).write_text(_page(data_json, {**config, "downloads": False, "links": False}, cdn, document=False), encoding="utf-8")
         written.append(Path(fragment))
-    (out / "data" / "results.json").write_text(json.dumps(res, separators=(",", ":"), default=str), encoding="utf-8")
+    (out / "data" / "results.json").write_text(json.dumps(_public(res), separators=(",", ":")), encoding="utf-8")
     if csv:
         for did, d in res.get("datasets", {}).items():
             pd.DataFrame(d["rows"], columns=d["columns"]).to_csv(out / "data" / f"{did}.csv", index=False)

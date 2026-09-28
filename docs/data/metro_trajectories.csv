@@ -1,0 +1,53 @@
+trajectory,metros,inferred_share,examples,year,demeaned_pp
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2012,0.8953
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2012,4.205
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2012,-1.142
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2012,2.244
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2013,0.5575
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2013,3.379
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2013,-1.291
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2013,1.749
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2014,0.3105
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2014,2.581
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2014,-1.564
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2014,1.288
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2015,0.1067
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2015,1.808
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2015,-1.368
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2015,0.8439
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2016,-0.1436
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2016,0.9827
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2016,-1.33
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2016,0.3565
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2017,-0.2957
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2017,0.1746
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2017,-0.7625
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2017,-0.05098
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2018,-0.4371
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2018,-0.6016
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2018,-0.6037
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2018,-0.4408
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2019,-0.3955
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2019,-1.305
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2019,0.09454
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2019,-0.7297
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2020,-0.3245
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2020,-1.672
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2020,0.8748
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2020,-0.8359
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2021,-0.2638
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2021,-2.207
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2021,1.293
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2021,-0.9993
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2022,-0.1091
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2022,-2.444
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2022,1.656
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2022,-1.143
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2023,-0.00492
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2023,-2.552
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2023,1.891
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2023,-1.178
+path 1,131,0.3359,San Francisco-Oakland-Fremont CA MSA; Miami-Fort Lauderdale-Pompano Beach FL MSA; San Jose-Sunnyvale-Santa Clara CA MSA,2024,0.104
+path 2,43,0.8837,Denver-Aurora CO MSA; Minneapolis-St. Paul-Bloomington MN-WI MSA; Detroit-Warren-Livonia MI MSA,2024,-2.349
+path 3,24,0.625,Houma-Bayou Cane-Thibodaux LA MSA; Abilene TX MSA; Bismarck ND MSA,2024,2.253
+path 4,161,0.4286,New York-Northern New Jersey-Long Island NY-NJ-PA MSA; Los Angeles-Long Beach-Santa Ana CA MSA; Chicago-Naperville-Joliet IL-IN-WI MSA,2024,-1.104
