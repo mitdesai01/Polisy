@@ -168,6 +168,9 @@ def main():
     occ = read("acs_occupation").set_index("occsoc")
     ok.append(check(abs(occ.female["151252"] - 2 / 3) < 1e-9 and abs(occ.graduate["151252"] - 1 / 3) < 1e-9
                     and occ.inferred_party_states["1191XX"] == 1, "IPUMS: weighted shares; Texas counts as an inferred-party state"))
+    import numpy as np
+    ok.append(check(abs(occ.log_wage_ft["151252"] - (100 * np.log(150000) + 50 * np.log(200000)) / 150) < 1e-9
+                    and pd.isna(occ.log_wage_ft["4720XX"]), "IPUMS: log wage of full-time workers; a worker with no wage is left out"))
     from polisy_lab.adapters.ipums import occsoc_for
     ok.append(check(occsoc_for("47-2061", occ.index) == "4720XX" and occsoc_for("15-1252", occ.index) == "151252",
                     "SOC 2018 codes find their OCCSOC code, X digits as wildcards"))

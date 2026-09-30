@@ -166,7 +166,8 @@ def adapt_ipums():
                    {share('race IN (4, 5, 6) AND hispan = 0')} AS asian_nh, {share('ba')} AS ba_plus, {share('grad')} AS graduate,
                    {share('public')} AS public_sector, {share('selfemp')} AS self_employed, {share('nonprofit')} AS nonprofit,
                    sum(w * (tranwork = 80)::INT) / nullif(sum(w * (tranwork > 0)::INT), 0) AS work_from_home,
-                   sum(w * ln(incwage)) FILTER (WHERE hours >= 35 AND incwage > 0 AND incwage < 999998)
+                   sum(w * ln(CASE WHEN incwage > 0 THEN incwage END))      -- DuckDB takes the log before the FILTER
+                     FILTER (WHERE hours >= 35 AND incwage > 0 AND incwage < 999998)
                      / sum(w) FILTER (WHERE hours >= 35 AND incwage > 0 AND incwage < 999998) AS log_wage_ft,
                    {share(f'state_fips IN ({inferred})')} AS inferred_party_states"""
         for key, name in (("occsoc", "acs_occupation"), ("indnaics", "acs_industry")):

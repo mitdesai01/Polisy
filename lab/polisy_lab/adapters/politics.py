@@ -364,9 +364,13 @@ def adapt_cspp():
         try:
             cb = pc.read_table(cp, cm, header_hint="variable")
             vc = find_col(cb, [r"variable", r"varname", r"name"], "variable", False, "cspp codebook")
-            dc = find_col(cb, [r"description", r"variablelabel", r"label", r"definition", r"shortdescription"], "description", False, "cspp codebook")
+            dc = find_col(cb, [r"description", r"variablelabel", r"shortdesc(ription)?", r"label", r"definition", r"desc"],
+                          "description", False, "cspp codebook")
             if vc and dc:
-                labels.update(dict(zip(cb[vc].astype(str), cb[dc].astype(str))))
+                labels.update({k: v for k, v in zip(cb[vc].astype(str), cb[dc].fillna("").astype(str)) if v.strip()})
+            else:
+                log(f"cspp: codebook {Path(cp).name} has no {'description' if vc else 'variable'} column "
+                    f"(columns {list(cb.columns)[:10]})")
         except Exception as e:
             log(f"cspp: codebook {Path(cp).name} unreadable ({e})")
     recent = out[out.year >= 2010]
