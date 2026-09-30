@@ -280,11 +280,11 @@ def _elections_compiled():
 
 
 # --------------------------------------------------------------------------- CSPP
-THEMES = {
-    "ideology": r"ideolog|liberal|conservat|citi|inst6|nominate|\bcf\b|ranney",
-    "party control": r"democrat|republican|gov.?party|trifecta|control|majority|legislat|senate|house|divided",
+THEMES = {        # matched on the variable name and its codebook description, lower case
+    "ideology": r"ideolog|\bliberal|\bconservat|citi\d|inst\d|nominate|\bcf\b|ranney",
+    "party control": r"democrat|republican|gov.?party|trifecta|partisan|party control|divided government|majority party",
     "policy": r"policy|regulat|tax|minimum.?wage|right.?to.?work|union|license|medicaid|expansion|spending",
-    "economy": r"gdp|income|unemploy|poverty|employment|wage|manufact|business",
+    "economy": r"\bgdp\b|gross state product|income|unemploy|poverty|\bwages?\b|manufactur|labor force|\bjobs\b",
     "innovation": r"patent|r.?&.?d|research|innovat|science|technolog|broadband|internet|startup|venture|university",
     "education": r"educat|college|degree|school|tuition",
     "population": r"population|immigra|foreign.?born|urban|age|race|hispanic|black|white",

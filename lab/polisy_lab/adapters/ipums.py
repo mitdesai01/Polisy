@@ -187,8 +187,26 @@ def adapt_ipums():
 
 
 # --------------------------------------------------------------------------- links used by link.py
+def _pins(k, s):
+    """How many digits of the SOC code s the OCCSOC code k fixes, or -1 when k does not cover s. The ACS groups
+    occupations it cannot tell apart two ways: X or Y for any digit (1191XX), and the SOC hierarchy's own codes, whose
+    trailing zeros stand for any digit (112030, the broad occupation of 11-2032 and 11-2033)."""
+    if k == s:
+        return 6
+    body = k.rstrip("0")
+    n = 0
+    for i, ch in enumerate(k):
+        if i >= len(body) or not ch.isdigit():
+            continue
+        if ch != s[i]:
+            return -1
+        n += 1
+    return n
+
+
 def occsoc_for(soc, codes):
-    """The most specific OCCSOC code that fits a SOC code ('15-1252' -> '151252', else '15125X', '1512XX' ...)."""
+    """The most specific OCCSOC code that covers a SOC code ('15-1252' -> '151252', else '112030' for '11-2032', else
+    '1512XX' ...)."""
     s = re.sub(r"\D", "", str(soc))
     if len(s) != 6:
         return None
@@ -197,10 +215,9 @@ def occsoc_for(soc, codes):
         k = str(code).strip().upper()
         if len(k) != 6 or not k[:2].isdigit():
             continue
-        if all(ch == d or not ch.isdigit() for ch, d in zip(k, s)):
-            n = sum(ch.isdigit() for ch in k)
-            if n > spec:
-                best, spec = code, n
+        n = _pins(k, s)
+        if n > spec:
+            best, spec = code, n
     return best
 
 

@@ -157,11 +157,22 @@ def _occupation_extras(p):
     """IPUMS ACS profiles (acs_*) and AI invention aimed at the occupation's tasks (webb_*, ai_incidence_*)."""
     from .adapters.ipums import occupation_profiles
     p["soc_key"] = _soc_key(p)
-    prof = occupation_profiles(p.soc_key)
+    cands = [c for c in ("soc", "soc2018", "soc_link") if c in p]         # its own code, then the SOC 2018 and 2010 links
+    codes = pd.concat([p[c] for c in cands]) if cands else pd.Series(dtype=object)
+    prof = occupation_profiles(codes[codes.astype(str).str.fullmatch(r"\d{2}-\d{4}")])
     if prof is not None:
-        p = p.merge(prof.rename(columns={"soc": "soc_key"}), on="soc_key", how="left")
+        to_occ = prof.dropna(subset=["occsoc"]).drop_duplicates("soc").set_index("soc").occsoc
+        occ = pd.Series(None, index=p.index, dtype=object)
+        for c in cands:
+            occ = occ.fillna(p[c].map(to_occ))
+        p["occsoc"] = occ
+        p = p.merge(prof.drop(columns="soc").dropna(subset=["occsoc"]).drop_duplicates("occsoc"), on="occsoc", how="left")
         diagnostic("VRscores occupations -> IPUMS ACS profiles", "panel_occupation", "acs_occupation", "SOC 2018 code -> OCCSOC",
                    p.loc[p.acs_workers.notna(), "workers"].sum(), p.workers.sum(), "matched workers")
+        miss = p[p.acs_workers.isna()].groupby(p.soc_key.fillna("no SOC code"), dropna=False).workers.sum().nlargest(8)
+        if len(miss) and miss.sum() > 0:
+            log("panel_occupation: occupations without an ACS profile, most workers first: "
+                + ", ".join(f"{k} ({v:,.0f})" for k, v in miss.items()))
     inv = read("occ_ai_invention")
     if inv is not None and len(inv):
         periods = sorted(x for x in inv.period.unique() if x != "all")
@@ -397,7 +408,9 @@ def panel_state_year(years=range(2000, 2026)):
         keep = sorted({v for vs in picks.values() for v in vs if v in cs})
         if keep:
             p = p.merge(cs[["state_fips", "year"] + keep].rename(columns={v: "cspp_" + v for v in keep}), on=["state_fips", "year"], how="left")
-            log("panel_state_year: CSPP variables used: " + "; ".join(f"{t}: {', '.join(v)}" for t, v in picks.items() if v))
+            desc = dict(zip(cat.variable, cat.description)) if "description" in cat else {}
+            log("panel_state_year: CSPP variables used: " + "; ".join(
+                f"{t}: " + ", ".join(f"{x} ({desc[x][:60]})" if desc.get(x) else x for x in v) for t, v in picks.items() if v))
     prof = read("cspp_state_profile")
     if prof is not None:
         p = p.merge(prof.rename(columns={c: "env_" + c for c in prof.columns if c != "state_fips"}), on="state_fips", how="left")

@@ -174,9 +174,23 @@ def main():
     from polisy_lab.adapters.ipums import occsoc_for
     ok.append(check(occsoc_for("47-2061", occ.index) == "4720XX" and occsoc_for("15-1252", occ.index) == "151252",
                     "SOC 2018 codes find their OCCSOC code, X digits as wildcards"))
+    grouped = ["112030", "1120XX", "151252", "4750YY", "13102X"]
+    ok.append(check([occsoc_for(s, grouped) for s in ("11-2032", "15-1252", "47-5041", "13-1023", "15-1132")]
+                    == ["112030", "151252", "4750YY", "13102X", None],
+                    "OCCSOC groups: a broad SOC code (trailing zero), X or Y; a SOC 2010 code alone finds none"))
+    from polisy_lab.adapters.politics import THEMES
+    import re as _re
+    tags = {d: [t for t, rx in THEMES.items() if _re.search(rx, d.lower())] for d in (
+        "frent rent control law", "gayempnondisc employment nondiscrimination for sexual orientation",
+        "citizen_ig number of citizen interest groups", "citi6013 citizen ideology (berry et al.)",
+        "hs_dem_prop share of house seats held by democrats", "gsp gross state product")}
+    ok.append(check([tags[d] for d in tags] == [[], [], [], ["ideology"], ["party control"], ["economy"]],
+                    "CSPP themes: rent control is not party control, nondiscrimination law not economy"))
     from polisy_lab import link
     extra = link._occupation_extras(pd.DataFrame({"soc": ["15-1252", "29-1216", None], "workers": [10.0, 5.0, 1.0]}))
     ok.append(check(extra.acs_workers.iloc[0] == 150 and extra.soc_key.isna().iloc[2], "occupation panel gets the ACS profile"))
+    old = link._occupation_extras(pd.DataFrame({"soc": ["15-1132"], "soc2018": ["15-1252"], "workers": [1.0]}))
+    ok.append(check(old.acs_workers.iloc[0] == 150, "a code the ACS lacks (SOC 2010) falls back to its SOC 2018 link"))
 
     if have_nlp:
         inc = read("patent_occ_incidence")
