@@ -217,6 +217,16 @@ def wcorr(x, y, w=None):
     return float(np.average((x - mx) * (y - my), weights=w) / math.sqrt(vx * vy)) if vx > 0 and vy > 0 else np.nan
 
 
+def leaning(value, negative, positive, neither, cut=0.1):
+    """Words for a result whose sign matters: `negative` when value <= -cut, `positive` when value >= cut, else
+    `neither`. Finding titles use it so that a rerun on other data cannot keep a claim its numbers no longer
+    support (with a correlation against the Republican share, negative means more Democratic). For a t
+    statistic, use cut=2."""
+    if value is None or not np.isfinite(value):
+        return neither
+    return negative if value <= -cut else positive if value >= cut else neither
+
+
 def boot_ci(stat, *arrays, n=None, seed=None, level=0.95):
     """Percentile bootstrap CI of stat(*resampled arrays); rows are resampled together."""
     n = n or LAB["SETTINGS"]["bootstrap"]

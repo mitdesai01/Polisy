@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..core import read, finding, dataset, view, wcorr, wls, log, FIPS_ABBR
+from ..core import read, finding, dataset, view, wcorr, wls, log, FIPS_ABBR, leaning
 from . import needs
 
 PERIODS = {"2013-16": (2013, 2016), "2017-19": (2017, 2019), "2020-22": (2020, 2022)}
@@ -103,7 +103,14 @@ def _county_ai(cy, ae):
     peak = yr.loc[yr.r_weighted.idxmin()]
     q5 = q[q.quintile == qn[5]].set_index("year").net_pp
     f = lambda per: f"{fe[per]['coef']:+.2f} (t = {fe[per]['t']:+.1f})" if per in fe else "n/a"  # noqa: E731
-    finding("mig-ai-exodus", "Households are leaving AI-exposed counties, faster every year and within the same state",
+    last_fe = fe.get("2020-22") or (fe[max(fe)] if fe else None)
+    head = leaning(last_fe["t"] if last_fe else np.nan, "Households are leaving AI-exposed counties within the same state",
+                   "Households are moving towards AI-exposed counties within the same state",
+                   "Within states, net migration is unrelated to AI exposure", cut=2)
+    coefs = [fe[p]["coef"] for p in PERIODS if p in fe]
+    if head.startswith("Households are leaving") and len(coefs) >= 3 and all(b < a for a, b in zip(coefs, coefs[1:])):
+        head = "Households are leaving AI-exposed counties, faster in each period and within the same state"
+    finding("mig-ai-exodus", head,
             f"Across {c.county_fips.nunique():,} counties, the correlation between AI exposure (AIGE) and net domestic migration went from "
             f"{y0.r_weighted:+.2f} ({int(y0.year) - 1}-{str(int(y0.year))[2:]}) to {peak.r_weighted:+.2f} ({int(peak.year) - 1}-{str(int(peak.year))[2:]}), weighted by "
             f"households. The most exposed fifth of counties lost {-q5.iloc[0]:.2f}% of households a year at the start and {-q5.min():.2f}% at the worst. "
@@ -120,8 +127,12 @@ def _county_ai(cy, ae):
             views=["mig-quintiles", "mig-aige-models", "mig-aige-corr", "county-migration-map", "county-migration-explorer"], rank=1)
     q5g = q[q.quintile == qn[5]].set_index("year").income_gap
     q1g = q[q.quintile == qn[1]].set_index("year").income_gap
-    finding("mig-income", "AI-exposed counties lose richer households than they gain",
-            f"In the most exposed fifth of counties, households moving out report more income than those moving in every year: "
+    out_richer = float((q5g < 0).mean())            # share of years in which leavers out-earn arrivals in the most exposed fifth
+    finding("mig-income", ("AI-exposed counties lose richer households than they gain" if out_richer > 0.5 else
+                           "AI-exposed counties gain richer households than they lose" if out_richer < 0.5 else
+                           "AI-exposed counties' leavers and arrivals earn about the same"),
+            f"In the most exposed fifth of counties, households moving out report more income than those moving in "
+            f"{'every year' if out_richer == 1 else f'in {out_richer:.0%} of years'}: "
             f"{q5g.iloc[0]:+.1f} thousand dollars of AGI per return in {int(q5g.index[0])} and {q5g.iloc[-1]:+.1f} in {int(q5g.index[-1])}. "
             f"In the least exposed fifth the gap is {q1g.iloc[0]:+.1f} and {q1g.iloc[-1]:+.1f}. The correlation of exposure with the income gap is "
             f"{y1.r_income_gap:+.2f} in {int(y1.year)}.",
@@ -149,7 +160,10 @@ def _exposure_gap(fc, ae):
     view("mig-exposure-gap", "line", "Destination minus origin AI exposure of movers (SD of county AIGE)", "mig_exposure_gap", x="year",
          y=["gap", "gap_interstate", "gap_income_weighted"],
          labels={"gap": "All county-to-county moves", "gap_interstate": "Moves across states", "gap_income_weighted": "Weighted by income moved"})
-    finding("mig-exposure-gap", "Movers trade down in AI exposure, and more so since 2020",
+    down = float((t.gap < 0).mean()) > 0.5
+    since = t[t.year >= 2020].gap.mean() < t[t.year < 2020].gap.mean() if (t.year >= 2020).any() and (t.year < 2020).any() else False
+    finding("mig-exposure-gap", ("Movers trade down in AI exposure" + (", and more so since 2020" if since else "")) if down else
+            "Movers do not trade down in AI exposure",
             f"Weighted by households, the average county-to-county move ends in a county {abs(t.gap.iloc[0]):.3f} SD of AIGE less exposed than its "
             f"origin in {int(t.year.iloc[0])} and {abs(t.gap.iloc[-1]):.3f} SD in {int(t.year.iloc[-1])} (largest: {abs(t.gap.min()):.3f} in "
             f"{int(t.year.iloc[t.gap.idxmin()])}); weighted by income moved it is {abs(t.gap_income_weighted.min()):.3f} at its largest.",

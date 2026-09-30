@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..core import read, finding, dataset, view, wcorr, boot_ci, wls, zscore, log, LAB
+from ..core import read, finding, dataset, view, wcorr, boot_ci, wls, zscore, log, LAB, leaning
 from . import needs, coef_rows
 
 APP_LABELS = {"exp_abstract_strategy_games": "Strategy games", "exp_real_time_video_games": "Video games",
@@ -88,9 +88,15 @@ def run():
                  "cognitive_share": "Cognitive share of abilities", "female": "Female share", "dyn_change": "Change in dynamic exposure"})
     coef = lambda m, t: (m["terms"][t]["coef"] * 100 if m else np.nan)  # noqa: E731
     tval = lambda m, t: (m["terms"][t]["t"] if m else np.nan)  # noqa: E731
-    finding("occ-ai-education", "AI exposure looks Democratic across occupations, but the link runs through education",
-            f"Across {len(d)} occupations, more AI-exposed ones have more Democratic workforces (r = {r_raw:+.2f}); weighted by workers "
-            f"the link nearly vanishes (r = {r_w:+.2f}, 95% CI {ci_w[0]:+.2f} to {ci_w[1]:+.2f}). With wage and education held equal, "
+    lean = leaning(r_raw, "Democratic", "Republican", None)
+    through_edu = m0 and m1 and abs(coef(m1, "aioe")) < abs(coef(m0, "aioe")) / 2
+    finding("occ-ai-education", (f"AI exposure looks {lean} across occupations" + (", but the link runs through education" if through_edu else "")
+                                 if lean else "AI exposure is not clearly partisan across occupations"),
+            f"Across {len(d)} occupations, more AI-exposed ones have "
+            + leaning(r_raw, "more Democratic workforces", "more Republican workforces", "about the same partisanship")
+            + f" (r = {r_raw:+.2f}); weighted by workers "
+            + ("the link nearly vanishes" if abs(r_w) < 0.1 else "it is") + f" (r = {r_w:+.2f}, 95% CI {ci_w[0]:+.2f} to {ci_w[1]:+.2f}). "
+            f"Alone, exposure's coefficient is {coef(m0, 'aioe'):+.1f} points per SD (t = {tval(m0, 'aioe'):+.1f}). With wage and education held equal, "
             f"exposure's coefficient is {coef(m1, 'aioe'):+.1f} points per SD (t = {tval(m1, 'aioe'):+.1f}); adding gender, race and "
             f"occupation group gives {coef(m2, 'aioe'):+.1f} (t = {tval(m2, 'aioe'):+.1f}).",
             theme="Political ideology x AI", level="occupation", datasets=["VRscores", "AIOE"],
@@ -106,12 +112,20 @@ def run():
         e1, s1 = m1["terms"]["req_education"], m1["terms"]["log_salary"]
         e2, s2, f2 = (m2["terms"].get(k, {"coef": np.nan, "t": np.nan}) for k in ("req_education", "log_salary", "female"))
         pay_holds = abs(s2["t"]) >= 2
-        finding("occ-education-vs-pay", "Education pulls occupations Democratic and pay pulls them Republican" +
-                ("" if pay_holds else "; the pay effect runs through who does the job"),
+        edu = leaning(e1["t"], "Education pulls occupations Democratic", "Education pulls occupations Republican", None, cut=2)
+        pay = leaning(s1["t"], "pay pulls them Democratic", "pay pulls them Republican", None, cut=2)
+        head = (f"{edu} and {pay}" if edu and pay else edu or (pay[0].upper() + pay[1:] if pay else
+                "Neither education nor pay clearly predicts an occupation's partisanship"))
+        head += "; the pay effect runs through who does the job" if pay and not pay_holds else ""
+        names = {"female": "the female share", "req_education": "required education", "log_salary": "pay", "white": "the white share",
+                 "black": "the Black share", "hispanic": "the Hispanic share", "asian": "the Asian share", "aioe": "AI exposure"}
+        top = max((k for k in m2["terms"] if k in names), key=lambda k: abs(m2["terms"][k]["coef"]), default=None)
+        finding("occ-education-vs-pay", head,
                 f"With both in the model, one SD more required education goes with {e1['coef'] * 100:+.1f} points Republican share (t = {e1['t']:+.1f}) "
                 f"and one SD higher pay with {s1['coef'] * 100:+.1f} (t = {s1['t']:+.1f}), {m1['n']} occupations. Adding gender and race shares and "
                 f"occupation group leaves education at {e2['coef'] * 100:+.1f} (t = {e2['t']:+.1f}) and pay at {s2['coef'] * 100:+.1f} (t = {s2['t']:+.1f}); "
-                f"the female share is the strongest single predictor ({f2['coef'] * 100:+.1f} points per SD, t = {f2['t']:+.1f}).",
+                + (f"the strongest single predictor is {names[top]} ({m2['terms'][top]['coef'] * 100:+.1f} points per SD, t = {m2['terms'][top]['t']:+.1f})."
+                   if top else f"the female share: {f2['coef'] * 100:+.1f} points per SD (t = {f2['t']:+.1f})."),
                 theme="Political ideology x AI", level="occupation", datasets=["VRscores", "AIOE inputs (O*NET, OES wages, CPS demographics)"],
                 strength="robust" if abs(e2["t"]) >= 2 else "suggestive", stats={"n_wage_edu": m1["n"], "n_full": m2["n"], "r2_full": m2["r2"]},
                     question="Is AI's partisan footprint just the education realignment, or does exposure add something within education levels?",
@@ -119,10 +133,15 @@ def run():
     if "pc_perception_vs_language" in d:
         r_pc = wcorr(d.pc_perception_vs_language, d.rep_share, w)
         m4t = m4["terms"]["pc_perception_vs_language"] if m4 else {"coef": np.nan, "t": np.nan}
-        finding("occ-two-ais", "Two kinds of AI exposure: language-AI jobs lean Democratic, perception-AI jobs Republican, until you control for education",
+        split = leaning(r_pc, "language-AI jobs lean Republican, perception-AI jobs Democratic",
+                        "language-AI jobs lean Democratic, perception-AI jobs Republican", None)
+        held = abs(m4t["t"]) >= 2
+        finding("occ-two-ais", (f"Two kinds of AI exposure: {split}" + (", even with education and demographics held equal" if held else
+                                                                        ", until you control for education") if split else
+                                "Language-AI and perception-AI jobs do not differ clearly in partisanship"),
                 f"Beyond overall exposure, occupations differ in which AI touches them: the second principal component contrasts image "
                 f"recognition and games with language modelling, translation and reading. It correlates {r_pc:+.2f} with Republican share "
-                f"(weighted), but with wage, education, gender, race and occupation group it is {m4t['coef'] * 100:+.1f} points per SD "
+                f"(weighted); with wage, education, gender, race and occupation group it is {m4t['coef'] * 100:+.1f} points per SD "
                 f"(t = {m4t['t']:+.1f}).", theme="Political ideology x AI", level="occupation", datasets=["AIOE inputs (O*NET abilities)", "VRscores"],
                 strength="fragile" if abs(m4t["t"]) < 2 else "suggestive", stats={"r_weighted": r_pc, "coef_controls_pp": m4t["coef"] * 100, "t": m4t["t"]},
                 question="Does the generative-AI wave (language) shift the politics of exposure towards Democratic-leaning professions compared with automation and vision AI?",

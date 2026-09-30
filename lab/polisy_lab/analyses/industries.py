@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..core import read, finding, dataset, view, wcorr, boot_ci, wls, log
+from ..core import read, finding, dataset, view, wcorr, boot_ci, wls, log, leaning
 from . import needs, coef_rows
 
 
@@ -50,13 +50,20 @@ def run():
     lm_txt = f" Language-model exposure is stronger (r = {out['aiie_lm'][0]:+.2f})." if "aiie_lm" in out else ""
     within = m2 and abs(t(m2, "aiie")) >= 2
     lm_within = m3 and abs(t(m3, "aiie_lm")) >= 2
-    title = ("AI-exposed industries have more Democratic workforces, even within sectors" if within else
-             "AI-exposed industries have more Democratic workforces, mostly because their workers are highly educated" +
-             ("; language-model exposure keeps a modest link within sectors" if lm_within else ""))
+    lean = leaning(r_a, "more Democratic", "more Republican", None)
+    through_edu = m0 and m1 and abs(cf(m1, "aiie")) < abs(cf(m0, "aiie")) / 2      # half or more of the link goes with education and pay
+    if lean is None:
+        title = "AI exposure says little about an industry's workforce partisanship"
+    elif within:
+        title = f"AI-exposed industries have {lean} workforces, even within sectors"
+    else:
+        title = (f"AI-exposed industries have {lean} workforces" + (", mostly because their workers are highly educated" if through_edu else "")
+                 + ("; language-model exposure keeps a modest link within sectors" if lm_within else ""))
     finding("ind-ai-partisanship", title,
             f"Across {len(d)} four-digit industries, AI exposure correlates {r_a:+.2f} with the Republican share of the matched workforce "
-            f"(weighted; 95% CI {ci_a[0]:+.2f} to {ci_a[1]:+.2f}).{lm_txt} Exposure tracks education closely, and with education and wages "
-            f"held equal the coefficient falls to {cf(m1, 'aiie'):+.1f} points per SD (t = {t(m1, 'aiie'):+.1f}); within sectors it is "
+            f"(weighted; 95% CI {ci_a[0]:+.2f} to {ci_a[1]:+.2f}).{lm_txt} Alone it is {cf(m0, 'aiie'):+.1f} points per SD "
+            f"(t = {t(m0, 'aiie'):+.1f}); with education and wages held equal the coefficient is {cf(m1, 'aiie'):+.1f} points per SD "
+            f"(t = {t(m1, 'aiie'):+.1f}); within sectors it is "
             f"{cf(m2, 'aiie'):+.1f} (t = {t(m2, 'aiie'):+.1f})" + (f" and {cf(m3, 'aiie_lm'):+.1f} for language-model exposure (t = {t(m3, 'aiie_lm'):+.1f})." if m3 else "."),
             theme="Political ideology x AI", level="industry", datasets=["VRscores", "AIOE (AIIE)", "OES staffing"],
             strength="suggestive" if m2 and abs(t(m2, "aiie")) >= 2 else "fragile",
@@ -75,12 +82,15 @@ def run():
         view("ind-gap", "bar", "Industries more Democratic (left) or Republican (right) than their occupations predict (points)", "ind_culture_gap",
              x="culture_gap_pp", y="title", orientation="h", color="sector")
         gm = wls(c, "culture_gap", ["aiie"] + ctrl, "workers")
-        finding("ind-composition", "Occupational mix explains most of an industry's partisanship; the rest points to place and mission",
+        r2 = r_c ** 2 if np.isfinite(r_c) and r_c > 0 else 0.0
+        finding("ind-composition", ("Occupational mix explains most of an industry's partisanship; the rest may be place and mission" if r2 >= 0.5 else
+                                    f"Occupational mix explains {r2:.0%} of the variation in industry partisanship"),
                 f"Predicting each industry's Republican share from national occupation shares and its staffing pattern gives r = {r_c:+.2f} "
                 f"with the actual share ({len(c)} industries with 70%+ of jobs linked). The remaining gap has an SD of {sd_gap * 100:.1f} points "
                 f"(actual: {sd_act * 100:.1f}). Most Democratic relative to their occupations: " + ", ".join(big.nsmallest(3, "culture_gap").title) +
                 "; most Republican: " + ", ".join(big.nlargest(3, "culture_gap").title) + "." +
-                (f" The gap is unrelated to AI exposure once education is held equal (t = {gm['terms']['aiie']['t']:+.1f})." if gm else ""),
+                (f" Once education is held equal, AI exposure {leaning(gm['terms']['aiie']['t'], 'makes the gap more Democratic', 'makes the gap more Republican', 'is unrelated to the gap', cut=2)} "
+                 f"(t = {gm['terms']['aiie']['t']:+.1f})." if gm else ""),
                 theme="Organizations", level="industry", datasets=["VRscores", "OES staffing", "AIOE"], strength="robust",
                 stats={"r_pred_actual": r_c, "sd_gap_pp": sd_gap * 100, "sd_actual_pp": sd_act * 100},
                 question="How much of the residual is geography (where the industry sits) versus organisational culture or mission?",
@@ -88,11 +98,22 @@ def run():
     if "change_pp" in d and d.change_pp.notna().sum() > 30:
         c = d.dropna(subset=["change_pp"])
         md = wls(c, "change_pp", ["aiie", "rep_share"], "workers")
-        finding("ind-drift", "Nearly every industry drifted Democratic, and AI exposure does not predict by how much",
-                f"{(c.change_pp < 0).mean():.0%} of {len(c)} industries moved towards the Democrats between the first and last year "
-                f"(weighted mean {np.average(c.change_pp, weights=c.workers):+.1f} points). Exposure does not predict the size of the move "
-                f"(t = {md['terms']['aiie']['t']:+.1f}); industries that started more Republican moved more (t = {md['terms']['rep_share']['t']:+.1f}), "
-                f"consistent with party being fixed at 2024 while younger cohorts enter.",
+        share_dem = float((c.change_pp < 0).mean())
+        t_ai, t_start = md["terms"]["aiie"]["t"], md["terms"]["rep_share"]["t"]
+        head = ("Nearly every industry drifted Democratic" if share_dem >= 0.8 else "Most industries drifted Democratic" if share_dem > 0.5 else
+                "Most industries drifted Republican" if share_dem < 0.5 else "Industries split between Democratic and Republican drift")
+        head += leaning(t_ai, ", and more AI-exposed industries moved further towards the Democrats",
+                        ", and more AI-exposed industries moved further towards the Republicans",
+                        ", and AI exposure does not predict by how much", cut=2)
+        finding("ind-drift", head,
+                f"{share_dem:.0%} of {len(c)} industries moved towards the Democrats between the first and last year "
+                f"(weighted mean {np.average(c.change_pp, weights=c.workers):+.1f} points). "
+                + leaning(t_ai, "More exposed industries moved further towards the Democrats", "More exposed industries moved further towards the Republicans",
+                          "Exposure does not predict the size of the move", cut=2) + f" (t = {t_ai:+.2f}); "
+                + leaning(t_start, "industries that started more Republican moved further towards the Democrats",
+                          "industries that started more Republican moved further towards the Republicans",
+                          "the starting level does not predict it either", cut=2) + f" (t = {t_start:+.2f})"
+                + (", consistent with party being fixed at 2024 while younger cohorts enter." if t_start <= -2 and share_dem > 0.5 else "."),
                 theme="Measurement", level="industry", datasets=["VRscores", "AIOE"], strength="robust",
                 stats={"n": len(c), "share_moving_dem": float((c.change_pp < 0).mean())},
                 question="Separate cohort replacement from real change: does drift vanish once workforce age is held constant?",

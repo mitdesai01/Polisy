@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..core import read, finding, dataset, view, wls, wcorr, regrade, log
+from ..core import read, finding, dataset, view, wls, wcorr, regrade, log, leaning
 from . import needs
 from .exposure import MEASURES
 
@@ -130,11 +130,27 @@ def _migration():
     ff = fullm[fullm.period == "2013-16"].set_index("variable")
     top = fl.drop(index="aige").assign(a=lambda x: x.t.abs()).sort_values("a", ascending=False)
     r16 = fl.loc["rep16"] if "rep16" in fl.index else None
-    finding("stress-mig", "The 'AI exodus' is mostly the partisan and telework geography of migration",
+    mostly = np.isfinite(att) and att >= 0.5
+    lead = top.index[0]
+    if mostly and lead in ("rep16", "telework"):
+        head = "The 'AI exodus' is mostly the partisan and telework geography of migration"
+    elif mostly:
+        head = f"The 'AI exodus' is mostly other county traits, led by {MIG_PHRASES.get(lead, lead)}"
+    else:
+        head = "Most of the 'AI exodus' survives density, education, income, housing, climate, politics and telework"
+    ser = lambda s: yrs[yrs.series == s].sort_values("year") if len(yrs) else yrs  # noqa: E731
+    ctrl_y, raw_y = ser("AI exposure, all controls"), ser("AI exposure, state effects only")
+    trend = ""
+    if len(ctrl_y) > 2 and len(raw_y) > 2:
+        small = ctrl_y.coef.abs().max() < 0.5 * raw_y.coef.abs().max()
+        grows = abs(raw_y.coef.iloc[-1]) > abs(raw_y.coef.iloc[0])
+        trend = (f" Year by year the controlled AI coefficient {'stays small' if small else 'does not stay small'} while the unadjusted one "
+                 f"{'grows' if grows else 'does not grow'} ({raw_y.coef.iloc[0]:+.2f} in {int(raw_y.year.iloc[0])}, {raw_y.coef.iloc[-1]:+.2f} in "
+                 f"{int(raw_y.year.iloc[-1])}).")
+    finding("stress-mig", head,
             f"In 2020-22, one SD more AI exposure meant {base.coef:+.2f} points of households a year within the same state "
             f"(t = {base.t:.1f}). With density, education, income, housing costs, January temperature, the 2016 vote and telework held "
-            f"equal it is {fin.coef:+.2f} (t = {fin.t:.1f}): {att:.0%} of the gradient goes. Year by year the controlled AI coefficient "
-            f"stays small and flat while the unadjusted one grows. The strongest predictor in the full model is "
+            f"equal it is {fin.coef:+.2f} (t = {fin.t:.1f}): {att:.0%} of the gradient goes.{trend} The strongest predictor in the full model is "
             f"{MIG_PHRASES.get(top.index[0], top.index[0])} ({top.coef.iloc[0]:+.2f}, t = {top.t.iloc[0]:.1f})"
             + (f"; the coefficient on the 2016 vote grew from {ff.loc['rep16'].coef:+.2f} (2013-16) to {r16.coef:+.2f} (2020-22)."
                if r16 is not None and "rep16" in ff.index else "."),
@@ -149,11 +165,15 @@ def _migration():
             caveats=["County context is a 2019 cross-section (ACS 2019, CBP); telework comes from the county's industry mix, not its occupations.",
                      "The 2016 vote is fixed before the flows it predicts, but it stands for everything that differs between red and blue counties."],
             views=["stress-mig-models", "stress-mig-years"], rank=1)
-    note = (f"Stress test (stress-mig): with county controls the 2020-22 gradient falls from {base.coef:+.2f} to {fin.coef:+.2f} points per SD; "
-            "AIGE mostly stands for dense, Democratic, telework-intensive counties.")
-    regrade("mig-ai-exodus", "fragile", note, title="Households are leaving AI-exposed counties, but the gradient is mostly density, politics and telework")
-    for fid in ("mig-income", "mig-exposure-gap"):
-        regrade(fid, "descriptive", "AIGE stands for dense, Democratic, telework-intensive counties (see stress-mig); read as a description, not an AI effect.")
+    if mostly:
+        note = (f"Stress test (stress-mig): with county controls the 2020-22 gradient falls from {base.coef:+.2f} to {fin.coef:+.2f} points per SD; "
+                "AIGE mostly stands for dense, Democratic, telework-intensive counties.")
+        regrade("mig-ai-exodus", "fragile", note, title="Households are leaving AI-exposed counties, but the gradient is mostly density, politics and telework")
+        for fid in ("mig-income", "mig-exposure-gap"):
+            regrade(fid, "descriptive", "AIGE stands for dense, Democratic, telework-intensive counties (see stress-mig); read as a description, not an AI effect.")
+    else:
+        regrade("mig-ai-exodus", "robust", f"Stress test (stress-mig): with county controls the 2020-22 gradient is {fin.coef:+.2f} points per SD "
+                                           f"(from {base.coef:+.2f}); most of it survives.")
     log(f"stress-mig: AIGE {base.coef:+.2f} -> {fin.coef:+.2f} with controls (2020-22)")
     return True
 
@@ -209,18 +229,33 @@ def _exposure():
     g3 = get("exp_cumul_genai", OCC_SPECS[3][0])
     flips = sorted({r.measure for r in x[x.model == OCC_SPECS[-1][0]].itertuples()
                     if abs(r.t) >= 2 and np.sign(r.coef) != np.sign(x[(x.variable == r.variable) & (x.model == OCC_SPECS[0][0])].coef.iloc[0])})
+    lean_g = leaning(g0.t if g0 is not None else np.nan, "Democratic", "Republican", None, cut=2)   # generative AI, alone
+    gone_g = g1 is not None and abs(g1.t) < 2                                                        # ... and with every control
+    lean_c = leaning(c1.t if c1 is not None else np.nan, "Democratic", "Republican", None, cut=2)   # automation risk, every control
     claim = []
     if g0 is not None and g1 is not None:
-        claim.append(f"Generative-AI exposure (DAIOE) leans Democratic on its own ({g0.coef:+.1f} points per SD, t = {g0.t:.1f}, "
-                     f"{int(g0.n)} occupations), but the lean disappears once gender and race are held equal"
-                     + (f" ({g3.coef:+.1f}, t = {g3.t:.1f})" if g3 is not None else "")
-                     + f" and stays near zero with occupation-group effects ({g1.coef:+.1f}, t = {g1.t:.1f}).")
+        s = (f"Generative-AI exposure (DAIOE) {'leans ' + lean_g if lean_g else 'has no clear lean'} on its own ({g0.coef:+.1f} points per SD, "
+             f"t = {g0.t:.1f}, {int(g0.n)} occupations)")
+        s += f"; with gender and race held equal it is {g3.coef:+.1f} (t = {g3.t:.1f})" if g3 is not None else ""
+        s += f"; with occupation-group effects too, {g1.coef:+.1f} (t = {g1.t:.1f})"
+        s += (": the lean disappears once composition is held equal." if gone_g else ": the lean survives the controls.") if lean_g else "."
+        claim.append(s)
     if c0 is not None and c1 is not None:
-        claim.append(f"Computerisation risk (Frey & Osborne) goes the other way: {c0.coef:+.1f} (t = {c0.t:.1f}) alone, {c1.coef:+.1f} "
-                     f"(t = {c1.t:.1f}) with education, pay, telework, gender, race and occupation group held equal.")
+        other = lean_g and lean_c and lean_c != lean_g
+        claim.append(f"Computerisation risk (Frey & Osborne) {'goes the other way' if other else 'for comparison'}: {c0.coef:+.1f} (t = {c0.t:.1f}) "
+                     f"alone, {c1.coef:+.1f} (t = {c1.t:.1f}) with education, pay, telework, gender, race and occupation group held equal.")
     if flips:
         claim.append("Measures whose sign flips and becomes clear (|t| of 2 or more) with every control: " + ", ".join(flips) + ".")
-    finding("stress-occ", "AI exposure's Democratic lean is composition; automation risk's Republican lean is not",
+    if lean_g and gone_g:
+        head = f"AI exposure's {lean_g} lean is composition" + (f"; automation risk's {lean_c} lean is not" if lean_c else
+                                                                  ", and automation risk shows no clear lean with every control")
+    elif lean_g:
+        head = f"AI exposure's {lean_g} lean survives every control" + (f", and so does automation risk's {lean_c} lean" if lean_c else
+                                                                          "; automation risk shows no clear lean")
+    else:
+        head = ("AI exposure shows no clear partisan lean" + (f"; automation risk leans {lean_c} with every control" if lean_c else
+                                                              ", and neither does automation risk with controls"))
+    finding("stress-occ", head,
             " ".join(claim), theme="Stress tests", level="occupation",
             datasets=["VRscores", "DAIOE (SOC 2018 panel)", "AIOE inputs (CPS demographics)", "Dingel & Neiman telework"], strength="robust",
             stats={"genai_raw": g0.coef if g0 is not None else None, "genai_raw_t": g0.t if g0 is not None else None,
@@ -235,9 +270,21 @@ def _exposure():
             caveats=["Gender and race shares exist for about 300 occupations, so the last two models use a smaller sample.",
                      "Occupation partisanship is national; occupations concentrated in Republican regions look Republican for that reason alone."],
             views=["stress-occ-models"], rank=2)
-    regrade("occ-waves", "fragile", "Stress test (stress-occ): the Democratic lean of generative-AI and language-model measures disappears once "
-                                    "gender and race are held equal; the Republican lean of computerisation risk survives every control.")
-    regrade("occ-ai-education", "robust", "Stress test (stress-occ): gender and race account for the rest of the lean.")
+    if lean_g and gone_g:
+        regrade("occ-waves", "fragile", f"Stress test (stress-occ): the {lean_g} lean of generative-AI exposure disappears once gender and race are "
+                                        "held equal" + (f"; the {lean_c} lean of computerisation risk survives every control." if lean_c else "."))
+    elif lean_g:
+        regrade("occ-waves", "robust", f"Stress test (stress-occ): the {lean_g} lean of generative-AI exposure survives education, pay, telework, "
+                                       "gender, race and occupation group.")
+    a0, a3 = get("frs21_aioe", OCC_SPECS[0][0]), get("frs21_aioe", OCC_SPECS[3][0])     # AIOE alone; with gender and race
+    if a0 is not None and a3 is not None:
+        if abs(a3.t) < 2:
+            regrade("occ-ai-education", "robust", f"Stress test (stress-occ): gender and race account for the rest of the lean ({a3.coef:+.1f}, t = {a3.t:.1f}).")
+        elif np.sign(a3.coef) != np.sign(a0.coef):
+            regrade("occ-ai-education", "robust", f"Stress test (stress-occ): with gender and race held equal the lean reverses ({a3.coef:+.1f}, t = {a3.t:.1f}).")
+        else:
+            regrade("occ-ai-education", "fragile", f"Stress test (stress-occ): the lean survives gender and race ({a3.coef:+.1f}, t = {a3.t:.1f}), so "
+                                                   "education is not the whole story.")
     log(f"stress-occ: {len(have)} measures x {len(OCC_SPECS)} models")
     return True
 
@@ -260,7 +307,10 @@ def _structure():
          x=["rep_pred", "balance_pred"], y=["rep_share", "balance"], size="workers", color="sector", text="title",
          labels={"rep_pred": "Predicted from occupation mix", "rep_share": "Actual Republican share", "balance_pred": "Predicted political balance",
                  "balance": "Actual political balance (1 = evenly split)"})
-    finding("stress-structure", "Most of an industry's partisanship, and half of its political balance, is the occupations it employs",
+    how_much = lambda r2: ("most" if r2 >= 0.6 else "half" if r2 >= 0.4 else f"{r2:.0%}")  # noqa: E731
+    r2s, r2b = (r ** 2 if np.isfinite(r) and r > 0 else 0.0 for r in (r_share, r_bal))
+    finding("stress-structure", f"{how_much(r2s).capitalize()} of an industry's partisanship, and {how_much(r2b)} of its political balance, "
+                                "is the occupations it employs",
             f"Across {len(s)} industries, the Republican share predicted from national occupation shares and each industry's staffing pattern "
             f"explains {r_share ** 2:.0%} of the variance in the actual share (r = {r_share:.2f}, weighted by workers) and {r_bal ** 2:.0%} of the "
             f"variance in political balance (how evenly split the workforce is; r = {r_bal:.2f}). Workforce 'ideology' and 'balance' measured at "

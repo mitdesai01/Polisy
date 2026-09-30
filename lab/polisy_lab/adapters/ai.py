@@ -372,9 +372,28 @@ def _dynamic_long(d, label):
 
 
 # --------------------------------------------------------------------------- BTOS
-GEO_COLS = [("state", [r"state", r"statename", r"st"]), ("sector", [r"sector", r"naics(sector)?", r"naics2"]),
+GEO_COLS = [("state", [r"state", r"statename", r"st"]), ("sector", [r"(?<!sub)sector", r"naics(sector)?", r"naics2"]),
             ("subsector", [r"subsector", r"naics3"]), ("msa", [r"msa", r"cbsa", r"metro.*"]),
             ("size", [r"empsize", r"employmentsize.*", r"size.*"])]
+
+
+def _btos_geo(cols):
+    """Every geography column of a BTOS table, as [(level, column)]: whole-name matches first, so that a table
+    by state and sector keeps both (level 'state_sector') instead of being filed under one and averaged into it;
+    only when no column matches whole does a partial match stand in (one column, as before)."""
+    found, taken = [], set()
+    for lvl, pats in GEO_COLS:
+        c = next((c for pat in pats for c in cols if c not in taken and re.fullmatch(pat, squash(c))), None)
+        if c is not None:
+            found.append((lvl, c))
+            taken.add(c)
+    if found:
+        return found
+    for lvl, pats in GEO_COLS:
+        c = find_col(cols, [p for p in pats if p != r"st"], "", False)    # a bare 'st' inside a name means nothing
+        if c is not None:
+            return [(lvl, c)]
+    return []
 
 
 def adapt_btos():
@@ -393,7 +412,13 @@ def adapt_btos():
         return False
     bl = pd.concat(frames, ignore_index=True)
     bl = bl[~bl.is_se] if "is_se" in bl else bl
-    write(bl.drop(columns=["is_se"], errors="ignore"), "btos_long", note=f"{bl.question.nunique()} questions")
+    key = ["level", "geo", "question", "answer", "period"]
+    n = len(bl)
+    bl = bl.drop_duplicates(key + ["value"])           # the same workbook found twice (a zip of your folder and a download)
+    clash = int(bl.duplicated(key).sum())
+    log(f"btos: {n - len(bl):,} rows repeated in more than one file counted once"
+        + (f"; {clash:,} rows still differ for the same level, place, question, answer and period (averaged below)" if clash else ""))
+    write(bl.drop(columns=["is_se"], errors="ignore"), "btos_long", note=f"{bl.question.nunique()} questions, levels {sorted(bl.level.unique())}")
     ai = bl[bl.question.str.contains(r"artificial intelligence|\bAI\b", case=False, regex=True, na=False)].copy()
     if ai.empty:
         log("btos: no question mentions Artificial Intelligence")
@@ -437,11 +462,13 @@ def _btos_long(d, label, stem):
     per_cols = [c for c in d.columns if re.fullmatch(r"(19|20)\d{2}\s?[-_/]?\s?\d{1,2}", str(c).strip()) or re.fullmatch(r"\d{6}", str(c).strip())
                 or re.fullmatch(r"\d{4}-\d{2}-\d{2}.*", str(c).strip())]
     geo_level, geo_col = "national", None
-    for lvl, pats in GEO_COLS:
-        c = find_col([x for x in d.columns if x not in (q, a, qid)], pats, "", False)
-        if c is not None and c not in per_cols:
-            geo_level, geo_col = lvl, c
-            break
+    geos = _btos_geo([x for x in d.columns if x not in (q, a, qid) and x not in per_cols
+                      and not re.search(r"estimate|percent|value|share|period|date|week|error|smpdt", squash(x))])
+    if len(geos) == 1:
+        geo_level, geo_col = geos[0]
+    elif len(geos) > 1:                                  # e.g. state x sector: its own level, geo = "state|sector"
+        geo_level, geo_col = "_".join(lvl for lvl, _ in geos), "_geo"
+        d = d.assign(_geo=d[[c for _, c in geos]].astype(str).agg("|".join, axis=1))
     if geo_col is None:
         low = stem.lower()
         geo_level = next((lvl for lvl, _ in GEO_COLS if lvl in low), "national")

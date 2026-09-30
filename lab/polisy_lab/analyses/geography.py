@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..core import read, finding, dataset, view, wcorr, wls, knn_weights, moran, log
+from ..core import read, finding, dataset, view, wcorr, wls, knn_weights, moran, log, leaning
 from . import needs
 from ..adapters.politics import CSPP_CURATED
 
@@ -56,9 +56,13 @@ def _states(s):
         r = wcorr(x.aige, x.vr_rep_share, x.jobs_2019) if "jobs_2019" in x else wcorr(x.aige, x.vr_rep_share)
         r_cov = wcorr(x.aige, x.coverage) if "coverage" in x else np.nan
         vote = f" The same states' Republican vote share correlates {wcorr(x.aige, x.rep_vote_share):+.2f} with AIGE." if "rep_vote_share" in x and x.rep_vote_share.notna().sum() > 20 else ""
-        finding("state-aige", "AI-exposed states have more Democratic workforces, and VRscores covers them more densely",
+        head = leaning(r, "AI-exposed states have more Democratic workforces", "AI-exposed states have more Republican workforces",
+                       "State AI exposure says little about workforce partisanship")
+        head += leaning(r_cov, ", and VRscores covers them less densely", ", and VRscores covers them more densely", "")
+        finding("state-aige", head,
                 f"State AI exposure (AIGE) correlates {r:+.2f} with the Republican share of the matched metro workforce in {last} ({n} states, weighted by jobs)."
-                f"{vote} Coverage (matched workers per job) correlates {r_cov:+.2f} with AIGE: the data lean towards AI-exposed labour markets.",
+                f"{vote} Coverage (matched workers per job) correlates {r_cov:+.2f} with AIGE"
+                + leaning(r_cov, ": the data lean away from AI-exposed labour markets.", ": the data lean towards AI-exposed labour markets.", "."),
                 theme="Political ideology x AI", level="state", datasets=["VRscores", "AIOE (AIGE)", "QCEW"], strength="suggestive",
                 stats={"n": n, "r_aige_rep": r, "r_aige_coverage": r_cov},
                 question="Is the partisan gap in AI exposure a feature of places or of the people the data happen to cover?",
@@ -77,7 +81,9 @@ def _states(s):
     if x.drift_pp.notna().sum() > 20:
         m = wls(x.reset_index(), "drift_pp", ["inferred", "vr_rep_share"], None)
         if m:
-            finding("state-regime", "States where party is inferred rather than registered drift Democratic faster",
+            finding("state-regime", leaning(m["terms"]["inferred"]["t"], "States where party is inferred rather than registered drift Democratic faster",
+                                            "States where party is inferred rather than registered drift Democratic more slowly",
+                                            "States drift alike whether party is inferred or registered", cut=2),
                     f"Holding the starting level equal, states whose party is inferred (primary participation or L2's model) drifted "
                     f"{abs(m['terms']['inferred']['coef']):.1f} points {'further towards' if m['terms']['inferred']['coef'] < 0 else 'less towards'} the Democrats between {first} and {last} "
                     f"(t = {m['terms']['inferred']['t']:+.1f}, {m['n']} states).",
@@ -144,11 +150,15 @@ def _metros(m):
         d["start"] = d.rep_share - d.drift_pp / 100
         mr = wls(d, "drift_pp", ["inferred", "start", "log_workers"], "workers")
         eff = mr["terms"]["inferred"]["coef"] if mr else np.nan
-        finding("metro-regime", "Where party is inferred rather than registered, metro workforces drift Democratic much faster",
+        t_reg = mr["terms"]["inferred"]["t"] if mr else np.nan
+        finding("metro-regime", leaning(t_reg, "Where party is inferred rather than registered, metro workforces drift Democratic faster",
+                                        "Where party is inferred rather than registered, metro workforces drift Democratic more slowly",
+                                        "Metro workforces drift alike whether party is inferred or registered", cut=2),
                 f"Across {len(d)} metros, {np.mean(d.drift_pp < 0):.0%} moved towards the Democrats between {first} and {last}. Metros in states "
                 f"where party comes from primaries or L2's model drifted {abs(eff):.1f} points {'further' if eff < 0 else 'less'} than metros in registration states, holding the "
-                f"starting level and size equal (t = {mr['terms']['inferred']['t']:+.1f}). The drift is a trait of the measurement regime, "
-                f"not only of places.", theme="Measurement", level="metro", datasets=["VRscores"], strength="robust",
+                f"starting level and size equal (t = {t_reg:+.1f})."
+                + (" The drift is a trait of the measurement regime, not only of places." if abs(t_reg) >= 2 else ""),
+                theme="Measurement", level="metro", datasets=["VRscores"], strength="robust" if abs(t_reg) >= 2 else "fragile",
                 stats={"n": len(d), "effect_pp": eff, "t": mr["terms"]["inferred"]["t"] if mr else None},
                 question="How much of VRscores' Democratic drift is cohort replacement, and how much is the inference model aging with voters?",
                 next_data="VRscores by age cohort and regime; registration-state benchmarks", views=["metro-explorer", "metro-traj"], rank=5)
@@ -156,17 +166,29 @@ def _metros(m):
             g2 = cur.dropna(subset=["lisa_drift"])
             hh = g2[g2.lisa_drift == "high-high"].nlargest(5, "lisa_drift_strength")
             ll = g2[g2.lisa_drift == "low-low"].nlargest(5, "lisa_drift_strength")
-            finding("metro-space", "Partisan drift clusters in space, along state lines",
-                    f"Metro drift is spatially autocorrelated (Moran's I = {mo['I']:.2f}, permutation p = {mo['p']:.3f}; level: I = {mo_lvl['I']:.2f}). "
+            clustered = mo["I"] > 0 and mo["p"] < 0.05
+            # do the clusters follow the states' party-data regimes? share of metros in the strongest clusters (high-high or
+            # low-low, top fifth by local Moran; the quadrant labels alone cover about half of all metros) in inferred-party states
+            in_cl = g2[g2.lisa_drift.isin(["high-high", "low-low"]) & (g2.lisa_drift_strength >= g2.lisa_drift_strength.quantile(0.8))]
+            inf_cl, inf_all = (in_cl.inferred.mean() if len(in_cl) else np.nan), cur.inferred.mean()
+            regime_line = abs(inf_cl - inf_all) >= 0.15 if len(in_cl) >= 10 else False
+            finding("metro-space", ("Partisan drift clusters in space" + (", along state lines" if regime_line else "")) if clustered else
+                    "Partisan drift shows no clear spatial clustering",
+                    f"Metro drift {'is' if clustered else 'is not clearly'} spatially autocorrelated (Moran's I = {mo['I']:.2f}, permutation "
+                    f"p = {mo['p']:.3f}; level: I = {mo_lvl['I']:.2f}). "
                     f"Clusters moving least towards the Democrats (or towards the Republicans): " + "; ".join(f"{i} ({v:+.1f})" for i, v in zip(hh.index, hh.drift_pp)) +
-                    ". Clusters moving most: " + "; ".join(f"{i} ({v:+.1f})" for i, v in zip(ll.index, ll.drift_pp)) + ". Clusters line up with states' party-data regimes.",
-                    theme="Geography", level="metro", datasets=["VRscores"], strength="robust",
-                    stats={"moran_drift": mo["I"], "p": mo["p"], "moran_level": mo_lvl["I"]},
-                    question="Are the Georgia and Missouri clusters real political change or artefacts of primary-based and modelled party?",
+                    ". Clusters moving most: " + "; ".join(f"{i} ({v:+.1f})" for i, v in zip(ll.index, ll.drift_pp)) +
+                    f". {inf_cl:.0%} of the metros in the strongest clusters (top fifth by local Moran) are in states where party is "
+                    f"inferred, against {inf_all:.0%} of all metros.",
+                    theme="Geography", level="metro", datasets=["VRscores"], strength="robust" if clustered else "fragile",
+                    stats={"moran_drift": mo["I"], "p": mo["p"], "moran_level": mo_lvl["I"], "inferred_in_clusters": inf_cl, "inferred_all": inf_all},
+                    question="Are these clusters real political change or artefacts of primary-based and modelled party?",
                     next_data="Party registration records for the same voters; primary crossover rates", views=["metro-map", "metro-explorer"], rank=9)
     if "metro_aiie" in cur and cur.metro_aiie.notna().sum() > 30:
         r = wcorr(cur.metro_aiie, cur.rep_share, cur.workers)
-        finding("metro-aiie", "Metros whose industry mix is more AI-exposed have more Democratic workforces",
+        finding("metro-aiie", leaning(r, "Metros whose industry mix is more AI-exposed have more Democratic workforces",
+                                      "Metros whose industry mix is more AI-exposed have more Republican workforces",
+                                      "A metro's AI exposure says little about its workforce partisanship"),
                 f"AI exposure computed from each metro's 2019 industry mix (QCEW x AIIE) correlates {r:+.2f} with the Republican share of the "
                 f"matched workforce ({cur.metro_aiie.notna().sum()} metros, weighted by workers).",
                 theme="Political ideology x AI", level="metro", datasets=["VRscores", "QCEW", "AIOE (AIIE)"], strength="suggestive",

@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..core import read, finding, dataset, view, wcorr, boot_ci, wls, log
+from ..core import read, finding, dataset, view, wcorr, boot_ci, wls, log, leaning
 from . import needs
 
 # measure -> (label, family). Families group measures built the same way.
@@ -36,6 +36,14 @@ def run():
     _dynamics(p)
     log(f"exposure: {len(have)} measures compared")
     return True
+
+
+def _link_note(p):
+    """How the VRscores occupations were linked to the SOC 2018 measures, as shares of matched workers (from this run)."""
+    if "soc2018_link" not in p or not p.workers.sum():
+        return "VRscores occupations are linked to the SOC 2018 measures by title or code."
+    lk = (p.groupby(p.soc2018_link.fillna("not linked")).workers.sum() / p.workers.sum()).sort_values(ascending=False)
+    return "VRscores occupations are linked to the SOC 2018 measures by " + ", ".join(f"{k} {v:.0%}" for k, v in lk.items()) + " (shares of matched workers)."
 
 
 def _waves(p, have):
@@ -89,7 +97,7 @@ def _waves(p, have):
             question="Which measure predicts what actually happens to workers (employment, wages, hours) since 2022, and do exposed "
                      "occupations shift politically, as robot exposure did after 2016?",
             next_data="VRscores occupation panel by year; OEWS employment and wages 2019-2025; CPS occupation panels",
-            caveats=["VRscores occupations are linked to SOC 2018 by title, then code; 12% of workers are not linked.",
+            caveats=[_link_note(p),
                      "Webb's and Frey-Osborne's scores come from older SOC versions mapped in the DAIOE panel."],
             views=["occ-waves", "occ-waves-models"], rank=2)
 
@@ -130,10 +138,15 @@ def _dynamics(p):
     same = float(x.pivot_table(index="soc", columns="year", values="daioe_allapps").corr().iloc[0, -1])
     up = e.nlargest(5, "daioe_rise_z")
     a, z = t.iloc[0], t.iloc[-1]
-    finding("occ-daioe", "Dynamic exposure mostly rises for everyone; where it rose most, workforces are more Democratic",
-            f"DAIOE grows about {np.exp(p.daioe_growth.mean()):.0f}-fold between 2012 and {int(z.year)} for every occupation alike (levels in {int(a.year)} "
-            f"and {int(z.year)} correlate {same:.2f}), so the change is mostly a shared trend. Relative standing moved a little: occupations "
-            f"that gained standing since 2012 have more Democratic workforces (r = {r_rise:+.2f}, 95% CI {ci[0]:+.2f} to {ci[1]:+.2f}, weighted by "
+    shared = same >= 0.9
+    rose = leaning(r_rise, "where it rose most, workforces are more Democratic", "where it rose most, workforces are more Republican",
+                   "where it rose most says little about partisanship")
+    finding("occ-daioe", ("Dynamic exposure mostly rises for everyone; " if shared else "Dynamic exposure rose unevenly across occupations; ") + rose,
+            f"DAIOE grows about {np.exp(p.daioe_growth.mean()):.0f}-fold between 2012 and {int(z.year)} (levels in {int(a.year)} "
+            f"and {int(z.year)} correlate {same:.2f})" + (", so the change is mostly a shared trend." if shared else ".") +
+            " Occupations that gained standing since 2012 have "
+            + leaning(r_rise, "more Democratic workforces", "more Republican workforces", "about the same partisanship")
+            + f" (r = {r_rise:+.2f}, 95% CI {ci[0]:+.2f} to {ci[1]:+.2f}, weighted by "
             f"workers), led by {', '.join(up.title.astype(str).str.split(',').str[0])}. The correlation of standing with the Republican share "
             f"drifted from {a.r_all:+.2f} ({int(a.year)}) to {z.r_all:+.2f} ({int(z.year)}).",
             theme="Political ideology x AI", level="occupation", datasets=["VRscores", "DAIOE (SOC 2010)"], strength="descriptive",

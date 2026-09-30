@@ -51,30 +51,52 @@ def run():
         nd, nr = int((e.change_pp <= -5).sum()), int((e.change_pp >= 5).sum())
         e["log_workers"] = np.log10(e.workers)
         m = wls(e, "change_pp", ["avg_rep_share", "log_workers"], None)
-        finding("emp-drift", "Large employers drift Democratic eight times as often as Republican; the most Republican and the largest drift most",
+        t_lean, t_size = m["terms"]["avg_rep_share"]["t"], m["terms"]["log_workers"]["t"]
+        head = (f"Large employers drift Democratic {nd / max(nr, 1):.1f} times as often as Republican" if nd >= nr else
+                f"Large employers drift Republican {nr / max(nd, 1):.1f} times as often as Democratic")
+        way = lambda t: "towards the Democrats" if t < 0 else "towards the Republicans"  # noqa: E731  (change_pp > 0 = more Republican)
+        if nd > nr and t_lean <= -2 and t_size <= -2:
+            head += "; the most Republican and the largest drift most"
+        else:
+            parts = ([f"more Republican employers moved further {way(t_lean)}"] if abs(t_lean) >= 2 else []) + \
+                    ([f"larger employers moved further {way(t_size)}"] if abs(t_size) >= 2 else [])
+            head += ("; " + " and ".join(parts)) if parts else ""
+        finding("emp-drift", head,
                 f"Of {len(e):,} large employers present every year, {nd:,} moved 5+ points towards the Democrats and {nr:,} towards the Republicans "
-                f"(ratio {nd / max(nr, 1):.1f} to 1). Drift is larger for more Republican employers (t = {m['terms']['avg_rep_share']['t']:+.1f}) and "
-                f"for larger ones (t = {m['terms']['log_workers']['t']:+.1f}).", theme="Organizations", level="employer", datasets=["VRscores"],
-                strength="robust", stats={"n": len(e), "drift_dem": nd, "drift_rep": nr},
+                f"(ratio {nd / max(nr, 1):.1f} to 1). Employers that started more Republican moved further {way(t_lean)} (t = {t_lean:+.1f}), "
+                f"larger ones further {way(t_size)} (t = {t_size:+.1f}); |t| below 2 means no clear difference.",
+                theme="Organizations", level="employer", datasets=["VRscores"],
+                strength="robust", stats={"n": len(e), "drift_dem": nd, "drift_rep": nr, "t_start_lean": t_lean, "t_size": t_size},
                 question="Is drift hiring (new cohorts), attrition, or relocation? Which organisational events precede it?",
                 next_data="Employer x year hires and exits by age; M&A events (SDC); locations", views=["emp-explorer"], rank=13)
         t = e[e.group == "AI & big tech"]
         if len(t) >= 8:
             other = e[e.group != "AI & big tech"]
-            up = t.nlargest(6, "change_pp")
-            finding("emp-bigtech", "AI and big-tech workforces barely joined the Democratic drift, and several moved Republican",
-                    f"The {len(t)} large AI and big-tech employers (identified by name) changed {np.average(t.change_pp, weights=t.workers):+.1f} points "
-                    f"on average, against {np.average(other.change_pp, weights=other.workers):+.1f} for all others. Moving Republican: "
-                    + "; ".join(f"{a} ({b:+.1f})" for a, b in zip(up.employer, up.change_pp)) + ".",
+            up = t[t.change_pp > 0].nlargest(6, "change_pp")
+            cb, co = np.average(t.change_pp, weights=t.workers), np.average(other.change_pp, weights=other.workers)
+            if co < 0 and co < cb < 0 and abs(cb) < abs(co) / 2:
+                head = "AI and big-tech workforces barely joined the Democratic drift"
+            elif cb > co + 1:
+                head = "AI and big-tech workforces moved less towards the Democrats than other large employers"
+            elif cb < co - 1:
+                head = "AI and big-tech workforces moved further towards the Democrats than other large employers"
+            else:
+                head = "AI and big-tech workforces moved much like other large employers"
+            head += ", and several moved Republican" if len(up) >= 3 else ""
+            finding("emp-bigtech", head,
+                    f"The {len(t)} large AI and big-tech employers (identified by name) changed {cb:+.1f} points "
+                    f"on average, against {co:+.1f} for all others. Moving Republican: "
+                    + ("; ".join(f"{a} ({b:+.1f})" for a, b in zip(up.employer, up.change_pp)) or "none") + ".",
                     theme="Political ideology x AI", level="employer", datasets=["VRscores"], strength="suggestive",
                     stats={"n_bigtech": len(t), "change_bigtech_pp": float(np.average(t.change_pp, weights=t.workers)),
                            "change_other_pp": float(np.average(other.change_pp, weights=other.workers))},
                     question="Did AI and cloud firms' expansion (data centres, new hubs in Texas, Virginia, Utah) or the 2022-24 layoffs shift their workforces' politics?",
                     next_data="Employer x metro x occupation headcounts; data-centre locations; layoff notices (WARN)", views=["emp-explorer", "emp-groups"], rank=4)
         top = e.reindex(e.change_pp.abs().sort_values(ascending=False).index).head(12)
-        finding("emp-artifacts", "The largest employer drifts look like artefacts of restructured firms",
+        finding("emp-artifacts", "The largest employer drifts need checking for restructured firms",
                 "The twelve largest absolute drifts: " + "; ".join(f"{a} ({b:+.0f})" for a, b in zip(top.employer, top.change_pp)) +
-                ". Many are spin-offs, mergers or rebrands after 2020, whose early years are rebuilt from today's profiles.",
+                ". In the first run most of the largest were spin-offs, mergers or rebrands after 2020, whose early years are rebuilt "
+                "from today's profiles; check these names before using drift as an outcome.",
                 theme="Anomalies", level="employer", datasets=["VRscores"], strength="artifact",
                 question="Flag restructured employers before using drift as an outcome.", next_data="M&A and spin-off dates (SDC, Crunchbase)",
                 views=["emp-explorer"], rank=21)
@@ -91,11 +113,23 @@ def run():
             txt = "; ".join(f"{d}: {(a - 1) * 100:.2f}% -> {(b - 1) * 100:.2f}%" for d, (a, b) in ov.items())
             up = [d for d, (a, b) in ov.items() if b > a]
             down = [d for d, (a, b) in ov.items() if b < a]
-            finding("sorting", "Partisans are sorting into different employers while sorting across industries and occupations declines",
+            jobs_down = [d for d in ("industry", "occupation") if d in down]
+            plural = {"employer": "employers", "metro": "metros", "industry": "industries", "occupation": "occupations"}
+            if "employer" in up and len(jobs_down) == 2:
+                head = "Partisans are sorting into different employers while sorting across industries and occupations declines"
+            elif "employer" in up:
+                head = "Partisans are sorting into different employers" + (
+                    f", and across {' and '.join(plural.get(d, d) for d in up if d != 'employer')} too" if len(up) > 1 else "")
+            else:
+                head = "Partisan sorting between employers did not rise" + (
+                    f"; it rose across {' and '.join(plural.get(d, d) for d in up)}" if up else "")
+            finding("sorting", head,
                     f"Same-party over-exposure (colleagues share one's party more often than by chance), first to last year: {txt}. "
-                    f"Rising: {', '.join(up) or 'none'}; falling: {', '.join(down) or 'none'}. Employer sorting rose "
+                    f"Rising: {', '.join(up) or 'none'}; falling: {', '.join(down) or 'none'}. Employer sorting changed "
                     f"{(ov['employer'][1] - ov['employer'][0]) * 100:+.2f} points" + (f", metro sorting {(ov['metro'][1] - ov['metro'][0]) * 100:+.2f}" if "metro" in ov else "") +
-                    ": most of the growth in workplace segregation happens between firms within the same kinds of jobs, not across occupations or industries.", theme="Organizations", level="employer", datasets=["VRscores"], strength="suggestive",
+                    (": most of the growth in workplace segregation happens between firms within the same kinds of jobs, not across occupations "
+                     "or industries." if "employer" in up and len(jobs_down) == 2 else "."),
+                    theme="Organizations", level="employer", datasets=["VRscores"], strength="suggestive",
                     stats={k: {"first": a, "last": b} for k, (a, b) in ov.items()},
                     question="Which organisational practices (hiring networks, location choice, mission statements, leadership politics) produce between-firm sorting?",
                     next_data="Firm-level leadership politics (DIPI), hiring sources, location histories", views=["sorting"], rank=3)
