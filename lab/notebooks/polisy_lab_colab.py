@@ -12,12 +12,14 @@
 #
 # 1. In Google Drive, make a folder `POLISY` with a folder `data` inside it.
 # 2. Put your downloads in `POLISY/data` as they came. Zips are fine and names do not matter: the VRscores report,
-#    `daioe-v1.0.0-scores.zip`, the IRS county migration zip, the CSPP file.
-# 3. Put the code in `POLISY`: on GitHub, Code → Download ZIP on the polisy repository, and upload the zip as it is
-#    (or `POLISY_lab_code.zip`, or leave it out and the notebook clones the repository).
+#    `daioe-v1.0.0-scores.zip`, the IRS county migration zip, the CSPP file. For the full VRscores data (step 3) add the
+#    four VRscores panel zips (each downloads as `dataverse_files.zip`, so give them different names), `Compustat_Final.csv`,
+#    the DIPI file, the Census `list1_2023.xlsx` and `list2_2023.xlsx`, and your ACS metro CSV if you have one.
+# 3. The code is cloned from GitHub each time, so it is always the latest (a code zip in `POLISY`, such as GitHub's
+#    `polisy-main.zip`, is used only when cloning fails).
 #
-# Each step below is one cell; run them in order. The technical report (`lab/docs/TECHNICAL_REPORT.md`, also the site's
-# Methods tab) explains every stage, dataset and link.
+# Each step below is one cell: run them in order, or use Runtime → Run all. The technical report
+# (`lab/docs/TECHNICAL_REPORT.md`, also the site's Methods tab) explains every stage, dataset and link.
 
 # %%
 # 1. Packages Colab lacks, and Google Drive
@@ -40,17 +42,24 @@ DATA = BASE / "data"                                        # your downloads: se
 os.environ["POLISY_LAB_ROOT"] = str(BASE / "lab")           # everything the lab writes (kept in Drive)
 os.environ.setdefault("POLISY_ROOT", "/content/polisy")     # POLISY_DA's own outputs, as in the POLISY_Lab notebook
 
-# The code: GitHub's "Download ZIP" of the polisy repository (polisy-main.zip) or POLISY_lab_code.zip, in the POLISY
-# folder or the Colab file panel. Without a zip it is cloned from GitHub (a private repository needs a token in the URL).
+# The code: the latest version from GitHub, cloned afresh every time this cell runs. Only when cloning fails (no
+# internet, or a private repository) is a code zip used instead: GitHub's "Download ZIP" (polisy-main.zip) or
+# POLISY_lab_code.zip, in the POLISY folder or the Colab file panel.
 REPO = "https://github.com/mitdesai01/polisy"
 CODE = Path("/content/polisy_code")
-is_code = lambda p: p.name.lower() in ("polisy_lab_code.zip", "polisy.zip") or p.name.lower().startswith("polisy-main")
-found = sorted((p for d in (BASE, Path("/content")) if d.exists() for p in d.glob("*.zip") if is_code(p)), key=lambda p: p.stat().st_mtime)
-if found:
-    shutil.rmtree(CODE, ignore_errors=True)
+shutil.rmtree(CODE, ignore_errors=True)
+if subprocess.run(["git", "clone", "-q", "--depth", "1", REPO, str(CODE)]).returncode == 0:
+    commit = subprocess.run(["git", "-C", str(CODE), "log", "-1", "--format=%h of %cd", "--date=short"],
+                            capture_output=True, text=True).stdout.strip()
+    print("code: GitHub, commit", commit)
+else:
+    is_code = lambda p: p.name.lower() in ("polisy_lab_code.zip", "polisy.zip") or p.name.lower().startswith("polisy-main")
+    found = sorted((p for d in (BASE, Path("/content")) if d.exists() for p in d.glob("*.zip") if is_code(p)),
+                   key=lambda p: p.stat().st_mtime)
+    if not found:
+        raise SystemExit(f"Could not clone {REPO} and found no code zip: upload GitHub's polisy-main.zip to {BASE}")
     zipfile.ZipFile(found[-1]).extractall(CODE)
-elif not (CODE.exists() and any(CODE.rglob("polisy_core.py"))):
-    subprocess.run(["git", "clone", "--depth", "1", REPO, str(CODE)], check=True)
+    print("code: GitHub could not be reached, so", found[-1], "is used")
 core_file = next(CODE.rglob("polisy_core.py"))              # the zip may wrap everything in one top folder
 for name in [m for m in sys.modules if m.startswith(("polisy_core", "polisy_lab"))]:
     del sys.modules[name]                                   # never keep an older copy loaded
@@ -66,13 +75,39 @@ pc.CONFIG["SEARCH_DIRS"] = [str(DATA), "/content"] + [d for d in pc.CONFIG["SEAR
 print("polisy_core", pc.__version__, "| polisy_lab", polisy_lab.__version__, "| lab folder:", LAB["SITE"].parent)
 
 # %%
-# 3. Optional: POLISY_DA first.
-# Module 05 downloads the Census CBSA delineation file (links metros to CBSAs) and O*NET titles (more occupation links).
-# Modules 01-04 build the VRscores panels from the raw VRscores files; without them the lab reads the VRscores HTML report.
+# 3. POLISY_DA: the full VRscores panels, the Compustat firm link and the metro controls (ACS, votes).
+# Set RUN_POLISY_DA = True to use them; without them the lab reads the VRscores HTML report instead.
+# Modules: 05 downloads the Census CBSA lists, O*NET, AIOE and any ACS years no file of yours covers; 01 finds your files
+# (check its table: every input you have should say ok); 02 turns the VRscores panels into Parquet (the employer panel is
+# about 6.26 million rows); 03 reads BLS OEWS if you have it; 04 builds the crosswalks and the employer name match;
+# 06 builds the panels (metros with ACS and votes); 07 checks the name match against DIPI.
+# The first run takes a while. Its outputs are saved to POLISY/polisy_da in Drive, and later sessions restore them
+# instead of rebuilding; set REBUILD_POLISY_DA = True after adding or changing data files.
 RUN_POLISY_DA = False
+REBUILD_POLISY_DA = False
+SAVED = BASE / "polisy_da"
 if RUN_POLISY_DA:
-    for module in ("05", "01", "02", "03", "04"):
-        pc.run(module)
+    import pandas as pd
+    if SAVED.exists() and not REBUILD_POLISY_DA:
+        shutil.copytree(SAVED, os.environ["POLISY_ROOT"], dirs_exist_ok=True)
+        print("POLISY_DA outputs restored from", SAVED)
+    else:
+        failed = []
+        for module in ("05", "01", "02", "03", "04", "06", "07"):
+            try:
+                pc.run(module)
+            except Exception as e:                            # say so, and let the lab carry on
+                failed.append(f"{module} ({type(e).__name__}: {e})")
+                print(f"MODULE {module} FAILED: {type(e).__name__}: {e}")
+        if failed:
+            print("Not saved to Drive, because these modules failed:", "; ".join(failed))
+        else:
+            shutil.copytree(os.environ["POLISY_ROOT"], SAVED, dirs_exist_ok=True,
+                            ignore=shutil.ignore_patterns("_tmp", "_duckdb_tmp"))
+            print("POLISY_DA outputs saved to", SAVED)
+    gates = Path(os.environ["POLISY_ROOT"]) / "output" / "tables" / "07_validation.csv"
+    if gates.exists():   # gate 5 compares the firms matched by name with DIPI: about 0.45-0.50 is good
+        print(pd.read_csv(gates).to_string(index=False))
 
 # %%
 # 4. Download the open datasets that are not in your folders yet (AIOE, DAIOE, BTOS, CSPP, IRS state and county files,
@@ -93,6 +128,11 @@ pd.DataFrame([{"source": s, **r} for s, m in res["catalog"].items() for r in m["
 # %%
 # 6. Canonical tables, then the linked panels. Each line below is one join and how much of it matched.
 run_all(stages=("adapt", "link"), fetch=False)
+vr = LAB["CANONICAL"] / "vr_occupation_year.parquet"
+if vr.exists():
+    vr = pd.read_parquet(vr, columns=["source", "year"])
+    print(f"VRscores read from the {vr.source.iloc[0]}, {vr.year.min()}-{vr.year.max()}",
+          "(the full panels)" if vr.source.iloc[0] == "panels" else "(the report: set RUN_POLISY_DA = True in step 3 for the panels)")
 pd.DataFrame(json.loads((LAB["RESULTS"] / "results.json").read_text())["diagnostics"])[["step", "key", "matched", "total", "share", "unit", "note"]]
 
 # %%

@@ -63,7 +63,7 @@ CONFIG = {
     "DIPI": "/content/Organizational_Leadership_File.csv",
     "COUNTYPRES": "/content/countypres_2000-2024.csv",
     "CBSA_REFERENCE": "/content/list1_2023.xlsx",
-    "CBSA_PRINCIPAL_CITIES": "/content/list2_2023.xlsx",
+    "CBSA_PRINCIPAL_CITIES": None,
     "ACS_METRO": None,                         # a path or a list of paths; None = every ACS file found
     "OEWS_NATIONAL": None,                     # a path, or {year: path}
     "OEWS_MSA": None,
