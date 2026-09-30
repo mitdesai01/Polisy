@@ -35,6 +35,8 @@ def msa_multistate(name):
 
 # --------------------------------------------------------------------------- VRscores
 def adapt_vrscores():
+    for old in Path(LAB["CANONICAL"]).glob("vr_*.parquet"):   # every VRscores table must come from this run's source:
+        old.unlink()                                          # a failure must not leave an older report-based table behind
     canon = Path(pc.CONFIG["CANONICAL"])
     if (canon / "vr_employer.parquet").exists() or (canon / "vr_occupation.parquet").exists():
         return _vr_from_panels(canon)
@@ -104,9 +106,9 @@ def _vr_state_from_metro(m):
 def _vr_employer_summary(c, min_tp=200):
     years = pc.q(c, "SELECT min(year) a, max(year) b, count(DISTINCT year) n FROM vr_employer").iloc[0]
     d = pc.q(c, f"""
-        WITH e AS (SELECT unit, year, any_value(company_name) name, sum(dem) dem, sum(rep) rep, sum(tp) tp
+        WITH e AS (SELECT unit, year, any_value(company_name) AS company, sum(dem) AS dem, sum(rep) AS rep, sum(tp) AS tp
                    FROM vr_employer GROUP BY 1, 2)
-        SELECT unit AS vrid, any_value(name) AS employer, count(*) AS years, avg(tp) AS workers,
+        SELECT unit AS vrid, any_value(company) AS employer, count(*) AS years, avg(tp) AS workers,
                sum(rep) / NULLIF(sum(tp), 0) AS avg_rep_share,
                regr_slope(rep / NULLIF(tp, 0), year) AS slope
         FROM e GROUP BY 1 HAVING count(*) = {int(years.n)} AND avg(tp) >= {min_tp}""")

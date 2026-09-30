@@ -27,7 +27,8 @@ HERE = Path(__file__).resolve().parent
 WORK = Path(sys.argv[1] if len(sys.argv) > 1 else tempfile.mkdtemp(prefix="polisy_smoke_"))
 DL = WORK / "downloads"
 os.environ["POLISY_ROOT"] = str(WORK / "polisy")
-sys.path.insert(0, str(HERE.parent / "POLISY_DA"))
+os.environ["POLISY_LAB_ROOT"] = str(WORK / "lab")
+sys.path[:0] = [str(HERE.parent / "POLISY_DA"), str(HERE.parent / "lab")]
 
 rng = np.random.default_rng(7)
 random.seed(7)
@@ -293,6 +294,18 @@ def main():
     ok.append(check(occ.tot_emp.notna().all() and occ.job_zone.notna().all() and occ.aioe.notna().all(),
                     "occupation panel carries OEWS, O*NET job zones and AIOE"))
     ok.append(check((out / "10_metro_inventive.csv").exists(), "module 10 metro correlation ran"))
+
+    # the lab on POLISY_DA's panels: the path a full-data run takes (and a table left over from a report-based run)
+    from polisy_lab.adapters.politics import adapt_vrscores
+    from polisy_lab.core import LAB
+    canon = Path(LAB["CANONICAL"])
+    canon.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"employer": ["from the report"], "source": ["report"]}).to_parquet(canon / "vr_employer_summary.parquet")
+    ran = adapt_vrscores()
+    want = ("vr_occupation_year", "vr_industry_year", "vr_metro_year", "vr_employer_summary", "vr_sorting")
+    tabs = {t: pd.read_parquet(canon / f"{t}.parquet") for t in want if (canon / f"{t}.parquet").exists()}
+    ok.append(check(ran and len(tabs) == len(want) and all((t.source == "panels").all() and len(t) for t in tabs.values()),
+                    f"the lab's VRscores adapter builds every table from the panels, replacing report leftovers ({sorted(tabs)})"))
     print(f"\n{sum(ok)} of {len(ok)} checks passed; files in {WORK}")
     return all(ok)
 
