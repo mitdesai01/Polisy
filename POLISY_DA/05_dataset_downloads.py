@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """05 Downloads: fetch the open datasets, skip politely when blocked.
 
-What it does: downloads O*NET, AIOE, the Census delineation file, ACS metro tables and
-(optionally) PatentsView into data/raw.
+What it does: downloads O*NET, AIOE, the Census delineation files (List 1, counties; List 2,
+principal cities), ACS metro tables and (optionally) PatentsView into data/raw.
+ACS: one acs1_<year>.json per year in polisy_core.ACS_YEARS, from the Census API, and only for
+years that no ACS file you already have covers (an ACS CSV in the data folder counts). A reply
+that is not a data table (an error page, a request for an API key) is not saved; the log says
+what came back. Without a download, save the ACS table as a CSV in the data folder instead.
 Why: every later module reads from data/raw, so a blocked download should fail here with
 an instruction, not halfway through an analysis.
 Expect: files in data/raw and a printed line per source. Anything that fails prints the
@@ -17,7 +21,7 @@ import json
 import urllib.request
 from pathlib import Path
 import pandas as pd
-from polisy_core import CONFIG, paths, log, locate
+from polisy_core import CONFIG, paths, log, locate, read_acs, ACS_VARS, ACS_YEARS
 
 # input key: (URLs tried in order, page to download from by hand)
 SOURCES = {
@@ -29,8 +33,10 @@ SOURCES = {
     "CBSA_REFERENCE": (["https://www2.census.gov/programs-surveys/metro-micro/geographies/reference-files/"
                         "2023/delineation-files/list1_2023.xlsx"],
                        "https://www.census.gov/geographies/reference-files/time-series/demo/metro-micro/delineation-files.html"),
+    "CBSA_PRINCIPAL_CITIES": (["https://www2.census.gov/programs-surveys/metro-micro/geographies/reference-files/"
+                               "2023/delineation-files/list2_2023.xlsx"],
+                              "https://www.census.gov/geographies/reference-files/time-series/demo/metro-micro/delineation-files.html"),
 }
-ACS_VARS = ["B01003_001E", "B19013_001E", "B23025_004E", "B15003_022E", "B15003_001E", "B01002_001E"]
 
 
 def fetch(url, dest: Path, manual_url="", quiet=False):
@@ -50,16 +56,36 @@ def fetch(url, dest: Path, manual_url="", quiet=False):
         return None
 
 
-def acs_metro(P, years=(2012, 2015, 2018, 2022)):
+def acs_metro(P, years=ACS_YEARS):
+    have = read_acs()
+    have = set() if have is None else set(have.year)
     for y in years:
+        if y in have:
+            log(f"ACS {y}: already have it")
+            continue
         dest = P["RAW"] / f"acs1_{y}.json"
         if dest.exists():
-            continue
+            dest.unlink()                  # an earlier reply that was not a data table (read_acs said why)
         url = (f"https://api.census.gov/data/{y}/acs/acs1?get=NAME," + ",".join(ACS_VARS) +
                "&for=metropolitan%20statistical%20area/micropolitan%20statistical%20area:*")
         if CONFIG["CENSUS_API_KEY"]:
             url += f"&key={CONFIG['CENSUS_API_KEY']}"
-        fetch(url, dest, "https://www.census.gov/data/developers/data-sets/acs-1year.html")
+        data = b""
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": CONFIG["USER_AGENT"]})
+            with urllib.request.urlopen(req, timeout=180) as r:
+                data = r.read()
+            table = json.loads(data)
+            if not (isinstance(table, list) and len(table) > 1 and "B01003_001E" in table[0]):
+                raise ValueError("the reply is not an ACS data table")
+        except Exception as e:
+            head = data[:100].decode("utf-8", "replace").replace("\n", " ")
+            log(f"ACS {y}: not downloaded ({type(e).__name__}: {e}{'; reply starts ' + repr(head) if head else ''}). "
+                "Set CONFIG['CENSUS_API_KEY'] (free at api.census.gov/data/key_signup.html) and run 05 again, or save "
+                "the ACS metro table as a CSV (NAME, CBSA code, year and the variables) in your data folder.")
+            continue
+        dest.write_bytes(data)
+        log(f"ACS {y}: downloaded, {len(table) - 1} metro and micro areas")
 
 
 def main(patentsview=False):

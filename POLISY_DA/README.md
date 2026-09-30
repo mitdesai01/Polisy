@@ -13,7 +13,9 @@ Every input is declared once, in `FILES` in `polisy_core.py`: what it is, the na
 3. a similar name: "(1)" copies, "Copy of …", spaces or dashes instead of underscores, other capitals, another extension;
 4. the contents alone: zip members (`employer_panel_year_*`, …) or header columns (`gvkey` + `fyear` + `conm`, …).
 
-Module 01 (or `show_files()`) prints which file each input resolved to and how it was found. Inputs it cannot find are listed with their download name and source. When two different files fit equally well, it reports `AMBIGUOUS`.
+Module 01 (or `show_files()`) prints which file each input resolved to and how it was found. Inputs it cannot find are listed with their download name and source. When two different files fit equally well, it reports `AMBIGUOUS`, except for inputs that may come as several files (the ACS metro tables, one or many years per file), which `find_all(key)` returns in full and which are all read.
+
+Metros: VRscores and each ACS year use the metros of their own delineation, so `metro_matcher` puts them on the codes of Census List 1 (by code where it still exists, then by city and state, then through List 2's principal cities), and `load_acs_metro` adds up older areas that are one CBSA today. Module 04's `keys/cw_msa_cbsa.csv` and module 06's `output/tables/06_acs_cbsa_map.csv` say which rule matched each metro.
 
 The checklist of file names to double-check at each step: https://claude.ai/code/artifact/1aa6867a-4183-4491-a34a-c7f41a86be48
 

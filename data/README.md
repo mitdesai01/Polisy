@@ -30,11 +30,15 @@ Declared in `FILES` in `POLISY_DA/polisy_core.py`; module 01 prints which file e
 | DIPI organizational leadership file | DIPI open data, Mannor and Busenbark (2025), tiny.cc/politicalideology | `Organizational_Leadership_File.csv` | no |
 | County presidential returns | Harvard Dataverse, MIT Election Lab, doi:10.7910/DVN/VOQCHQ | `countypres_2000-2024.csv` | no |
 | Census CBSA delineation file, List 1 | census.gov, Metropolitan and Micropolitan Delineation Files | `list1_2023.xlsx` | yes |
+| Census CBSA delineation file, List 2 (principal cities) | census.gov, Metropolitan and Micropolitan Delineation Files | `list2_2023.xlsx` | yes |
+| ACS 1-year metro tables (population, median household income, employment, bachelor's share, median age) | Census API (module 05), or any table you saved: one row per metro and year with `NAME`, the CBSA code, `year` and `B01003_001E`, `B19013_001E`, `B23025_004E`, `B15003_022E`, `B15003_001E`, `B01002_001E` | `acs1_<year>.json` from module 05, or for example `ACS_MSA_2012_2024.csv`; several files are all read | yes, for the years no file covers (the Census API may ask for a key: `pc.CONFIG["CENSUS_API_KEY"]`) |
 | BLS OEWS national, metro and 4-digit industry estimates | bls.gov/oes/tables.htm | `oesm{yy}nat.zip`, `oesm{yy}ma.zip`, `oesm{yy}in4.zip` | no |
 | O*NET database, text files | onetcenter.org/database.html | `db_29_0_text.zip` | yes |
 | AIOE scores | github.com/AIOE-Data/AIOE | `AIOE_DataAppendix.xlsx` | yes |
 
 The lab reads two of these through POLISY_DA when they are present: the county presidential returns (the partisan direction of county-to-county moves) and the CBSA delineation file (links metros to CBSAs for metro-level AI exposure).
+
+Metros change between delineations. VRscores names its metros as in an older delineation, and each ACS year uses the metros of its time (2012 the 2009 metros: Los Angeles is 31100 there and 31080 today). Modules 04 and 06 put both on today's CBSA codes, by code where it still exists and otherwise by city and state, using List 2's principal cities for metros whose city is no longer in any title (Anderson, IN is part of Indianapolis today). ACS areas that are one CBSA today are added up; the few small ones absorbed into a bigger metro whose city is no longer a principal city (Madera, CA; Ocean City, NJ) are listed in the log and left out. `output/tables/06_acs_cbsa_map.csv` shows where every ACS area-year went.
 
 ## If the wrong file is picked
 

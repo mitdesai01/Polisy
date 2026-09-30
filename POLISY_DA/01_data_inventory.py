@@ -2,8 +2,8 @@
 """01 Data inventory.
 
 What it does: finds every input, whatever it came to be called between the download page
-and Colab, lists what is inside each file, and reads DIPI and the CBSA reference once, so
-a file that is there but unusable fails here rather than in module 04 or 07.
+and Colab, lists what is inside each file, and reads DIPI, the CBSA lists and the ACS metro
+tables once, so a file that is there but unusable fails here rather than in module 04, 06 or 07.
 Why: nothing downstream should run on a half-complete download, and the VRscores ZIPs
 mix .tab and .csv members that look wrong until you check them. File names drift: "(1)"
 copies, renamed or unzipped zips, WRDS's random names. polisy_core.FILES says what each
@@ -22,7 +22,7 @@ from pathlib import Path
 import pandas as pd
 import polisy_core
 from polisy_core import (paths, log, save, show_files, spec, as_year, locate, load_dipi, dipi_measure,
-                         cbsa_delineation)
+                         cbsa_delineation, principal_cities, read_acs)
 
 CODEBOOK_ROWS = {2012: 370426, 2013: 393571, 2014: 417604, 2015: 439982, 2016: 461191,
                  2017: 482144, 2018: 502104, 2019: 516553, 2020: 525013, 2021: 535238,
@@ -46,7 +46,7 @@ def contents(src, pattern=None):
 
 
 def read_checks():
-    """Read DIPI and the CBSA reference end to end; a readable file is not a usable one."""
+    """Read DIPI, the CBSA lists and the ACS tables end to end; a readable file is not a usable one."""
     out = []
     try:
         d = load_dipi() if locate("DIPI")["path"] is not None else None
@@ -67,6 +67,21 @@ def read_checks():
                                                              else "no county codes: this is not List 1")})
     except Exception as e:
         out.append({"input": "CBSA_REFERENCE", "readable": False, "detail": f"{type(e).__name__}: {e}"})
+    try:
+        pcs = principal_cities()
+        if pcs is not None:
+            out.append({"input": "CBSA_PRINCIPAL_CITIES", "readable": len(pcs) > 0,
+                        "detail": f"{len(pcs):,} principal cities of {pcs.cbsa.nunique():,} CBSAs"})
+    except Exception as e:
+        out.append({"input": "CBSA_PRINCIPAL_CITIES", "readable": False, "detail": f"{type(e).__name__}: {e}"})
+    try:
+        acs = read_acs()
+        if acs is not None:
+            out.append({"input": "ACS_METRO", "readable": True,
+                        "detail": "areas by year: " + ", ".join(f"{y} {n}" for y, n in acs.groupby("year").size().items())
+                                  + f"; from {acs.attrs.get('files', acs.source.nunique())} file(s)"})
+    except Exception as e:
+        out.append({"input": "ACS_METRO", "readable": False, "detail": f"{type(e).__name__}: {e}"})
     return pd.DataFrame(out, columns=["input", "readable", "detail"])
 
 
@@ -84,7 +99,7 @@ def main():
             rows.append({"asset": r.input, "status": r.status.lower(), "found_by": r.found_by, **item})
     inv = pd.DataFrame(rows)
     save(inv, "01_inventory")
-    checks = save(read_checks(), "01_read_checks", "DIPI and CBSA reference read end to end")
+    checks = save(read_checks(), "01_read_checks", "DIPI, CBSA lists and ACS read end to end")
     for c in checks.itertuples(index=False):
         log(f"{c.input}: {'ok' if c.readable else 'NOT USABLE'} - {c.detail}")
     missing = files[files.status == "MISSING"]

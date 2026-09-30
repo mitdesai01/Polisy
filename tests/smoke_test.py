@@ -47,6 +47,10 @@ for i, (city, town) in enumerate(zip(CITIES, TOWNS)):
     st, sfips, sname = STATES[i % len(STATES)]
     METROS.append({"cbsa": f"{10020 + 20 * i}", "city": city, "town": town, "st": st, "sfips": sfips,
                    "sname": sname, "counties": [f"{3 + 2 * i:03d}", f"{5 + 2 * i:03d}"]})
+# a VRscores metro named after a place that is a principal city (List 2) but in no CBSA title,
+# like Anderson, IN, which is part of Indianapolis today
+PORT = METROS[2]
+PORT_MSA = f"Port {PORT['city']} {PORT['st']} MSA"
 OCCS = [f"{g}-{1000 + 11 * k}" for g in ("11", "13", "15", "17", "19", "25", "29", "41", "43", "47", "51", "53")
         for k in range(4)]
 FIRMS = [f"{a} {b}" for a in ("Acme", "Globex", "Initech", "Umbrella", "Stark", "Wayne", "Wonka", "Tyrell",
@@ -83,7 +87,8 @@ def build():
     firm_dem = {}
 
     # VRscores: four downloads that are all called dataverse_files.zip
-    msa_names = [f"{m['city']}-{m['town']} {m['st']} MSA" for m in METROS] + ["Atlantis-Ocean ZZ MSA"]   # last one has no CBSA
+    msa_names = ([f"{m['city']}-{m['town']} {m['st']} MSA" for m in METROS]
+                 + [PORT_MSA, "Atlantis-Ocean ZZ MSA"])  # a metro known only from List 2; one with no CBSA
     msa = {f"msa_panel_year_{y}.tab": vr_frame("msa", msa_names, y)
            .to_csv(index=False) for y in YEARS}
     zip_dir({**msa, "codebook.md": "# VRscores MSA panel"}, DL / "dataverse_files.zip")
@@ -135,7 +140,17 @@ def build():
     rows += [[None] * 12, ["Note: synthetic delineation for tests"] + [None] * 11,
              ["Source: File prepared by U.S. Census Bureau, Population Division"] + [None] * 11]
     pd.DataFrame(rows).to_excel(DL / "list1_2023 (1).xlsx", header=False, index=False)
-    pd.DataFrame([["List 2. Principal Cities"], ["CBSA Code"]]).to_excel(DL / "list2_2023.xlsx", header=False, index=False)
+    # Census List 2: principal cities, more of them than the titles name
+    rows = [["List 2. Principal Cities of Metropolitan and Micropolitan Statistical Areas"] + [None] * 5,
+            ["July 2023"] + [None] * 5,
+            ["CBSA Code", "CBSA Title", "Metropolitan/Micropolitan Statistical Area", "Principal City Name",
+             "FIPS State Code", "FIPS Place Code"]]
+    for m in METROS:
+        for k, place in enumerate((m["city"], m["town"], f"Port {m['city']}")):
+            rows.append([m["cbsa"], f"{m['city']}-{m['town']}, {m['st']}", "Metropolitan Statistical Area", place,
+                         m["sfips"], f"{1000 + k:05d}"])
+    rows += [[None] * 6, ["Note: synthetic principal cities for tests"] + [None] * 5]
+    pd.DataFrame(rows).to_excel(DL / "list2_2023.xlsx", header=False, index=False)
 
     # MIT county returns as Dataverse's default .tab; 2020 has TOTAL rows plus mode rows
     votes = []
@@ -197,6 +212,17 @@ def build():
     acs += [[f"{m['city']}-{m['town']}, {m['st']} Metro Area", "500000", "60000", "250000", "90000", "330000",
              "38.5", m["cbsa"]] for m in METROS]
     (raw / "acs1_2015.json").write_text(json.dumps(acs))
+    (raw / "acs1_2022.json").write_text("error: You included a key with this request, however, it is not valid.")
+    # ACS saved by hand as one CSV for two years, in an older delineation: METROS[1] under an old
+    # code, and a separate "Port" metro that is part of PORT's CBSA today
+    old = [{"NAME": f"{m['city']}-{m['town']}, {m['st']} Metro Area", "CBSA": "99901" if m is METROS[1] else m["cbsa"],
+            "B01003_001E": 400000 + k, "B19013_001E": 50000, "B23025_004E": 200000, "B15003_022E": 60000,
+            "B15003_001E": 260000, "B01002_001E": 37.0, "year": y}
+           for y in (2012, 2013) for k, m in enumerate(METROS)]
+    old.append({"NAME": f"Port {PORT['city']}, {PORT['st']} Metro Area", "CBSA": "99902", "B01003_001E": 100000,
+                "B19013_001E": 40000, "B23025_004E": 50000, "B15003_022E": 10000, "B15003_001E": 65000,
+                "B01002_001E": 42.0, "year": 2012})
+    pd.DataFrame(old).to_csv(DL / "ACS_MSA_2012_2013.csv", index=False)
 
     # noise a real downloads folder has
     (DL / "notes.txt").write_text("to do: thesis chapter 3")
@@ -234,11 +260,25 @@ def main():
     ok.append(check(len(county) == 2 * len(METROS) and county.county_fips.str.fullmatch(r"\d{5}").all()
                     and county.county_fips.str.startswith("01").any(), "county links with zero-padded FIPS"))
     cw = pd.read_csv(keys / "cw_msa_cbsa.csv", dtype=str)
-    ok.append(check(cw.cbsa.notna().sum() == len(METROS) and cw.loc[cw.cbsa.isna(), "msa"].tolist() == ["Atlantis-Ocean ZZ MSA"],
+    ok.append(check(cw.cbsa.notna().sum() == len(METROS) + 1 and cw.loc[cw.cbsa.isna(), "msa"].tolist() == ["Atlantis-Ocean ZZ MSA"],
                     "every real VRscores metro matched to a CBSA, the made-up one left unmatched"))
+    port = cw.set_index("msa").loc[PORT_MSA]
+    ok.append(check(port.cbsa == PORT["cbsa"] and port.match_method == "principal city",
+                    "a metro named after a principal city in no title found through List 2"))
+    ok.append(check(files.loc["CBSA_PRINCIPAL_CITIES", "path"].endswith("list2_2023.xlsx")
+                    and files.loc["ACS_METRO", "status"] == "ok", "List 2 and the ACS tables found"))
     metro = pd.read_parquet(Path(pc.CONFIG["PANELS"]) / "metro_year.parquet")
     ok.append(check(metro.loc[metro.cbsa.notna(), "rep_vote_share"].notna().all() and metro.cbsa.isna().any()
                     and metro.population.notna().any(), "metro panel carries vote shares and ACS; unmatched metro kept"))
+    real = metro[metro.msa.isin([f"{m['city']}-{m['town']} {m['st']} MSA" for m in METROS])]
+    ok.append(check((real.acs_year == real.year.clip(upper=2013).where(real.year < 2015, 2015)).all(),
+                    "each metro-year gets the latest ACS year at or before it (CSV 2012-13, API download 2015)"))
+    acs = pd.read_parquet(Path(pc.CONFIG["CANONICAL"]) / "acs_metro.parquet").set_index(["cbsa", "year"])
+    ok.append(check(acs.loc[(METROS[1]["cbsa"], 2012), "population"] == 400001,
+                    "an ACS area under an older code matched to today's CBSA by name"))
+    ok.append(check(acs.loc[(PORT["cbsa"], 2012), "acs_areas"] == 2 and acs.loc[(PORT["cbsa"], 2012), "population"] == 400002 + 100000,
+                    "older areas that are one CBSA today are added up"))
+    ok.append(check(2022 not in set(acs.reset_index().year), "an API reply that is not a data table is skipped, not read"))
     one = pd.read_csv(DL / "countypres_2000-2024.tab", sep="\t", dtype=str)
     one = one[(one.year == "2020") & (one["mode"] == "TOTAL") & one.party.isin(["DEMOCRAT", "REPUBLICAN"])]
     cbsa0 = county[county.cbsa == METROS[0]["cbsa"]].county_fips.str.lstrip("0")

@@ -37,7 +37,7 @@ try:
 except ImportError:
     HAVE_POLARS = False
 
-__version__ = "2026-09-24 file finder"
+__version__ = "2026-09-29 ACS tables and principal cities"
 
 # --------------------------------------------------------------------------- config
 ROOT = Path(os.environ.get("POLISY_ROOT", "/content/polisy"))
@@ -63,6 +63,8 @@ CONFIG = {
     "DIPI": "/content/Organizational_Leadership_File.csv",
     "COUNTYPRES": "/content/countypres_2000-2024.csv",
     "CBSA_REFERENCE": "/content/list1_2023.xlsx",
+    "CBSA_PRINCIPAL_CITIES": "/content/list2_2023.xlsx",
+    "ACS_METRO": None,                         # a path or a list of paths; None = every ACS file found
     "OEWS_NATIONAL": None,                     # a path, or {year: path}
     "OEWS_MSA": None,
     "OEWS_INDUSTRY": None,
@@ -156,6 +158,7 @@ EXCEL = (".xlsx", ".xlsm", ".xls")
 #   columns      header cells the table must have ("~x" = some cell containing x); the
 #                first rows are searched, so title rows above the header are fine
 #   prefer       among several fitting tables, prefer the one with this column
+#   many         the input may come as several files (ACS years); find_all() returns all of them
 # {yy} and {yyyy} stand for the OEWS year.
 FILES = {
     "VR_EMPLOYER": {
@@ -206,6 +209,20 @@ FILES = {
         "columns": ("cbsacode", "~fipscounty"),
         "source": "census.gov, Metropolitan and Micropolitan Delineation Files, List 1 (July 2023); module 05 downloads it",
         "used_by": "01, 04 (06 through keys/cw_cbsa_county.csv)"},
+    "CBSA_PRINCIPAL_CITIES": {
+        "what": "Census CBSA delineation file, List 2 (principal cities)", "download_as": "list2_2023.xlsx",
+        "names": r"^list_?2($|_)|principal_?cit", "kinds": (".xlsx", ".xls", ".csv"),
+        "columns": ("cbsacode", "~principalcity"),
+        "source": "census.gov, Metropolitan and Micropolitan Delineation Files, List 2 (July 2023); module 05 downloads it",
+        "used_by": "04, 06 (metros whose names or codes changed between delineations)"},
+    "ACS_METRO": {
+        "what": "ACS 1-year metro tables (population, income, employment, education, age)",
+        "download_as": "acs1_<year>.json from module 05, or a table such as ACS_MSA_2012_2024.csv",
+        "names": r"(^|_)acs", "kinds": TABLES + (".json",),
+        "columns": ("~b01003", "~b19013"), "many": True,
+        "source": "Census API, ACS 1-year, metropolitan and micropolitan areas (module 05 downloads it when the "
+                  "API answers); any CSV or Excel table with NAME, the CBSA code and the same variables works",
+        "used_by": "06"},
     "OEWS_NATIONAL": {
         "what": "BLS OEWS national estimates", "download_as": "oesm{yy}nat.zip",
         "names": r"^oesm{yy}nat|^national_m{yyyy}_dl", "kinds": (".zip", ".xlsx", "dir"),
@@ -249,7 +266,7 @@ def clean_name(name):
     """'Copy of Organizational Leadership File (1).CSV' -> ('organizational_leadership_file', '.csv')."""
     name = str(name).strip()
     ext = Path(name).suffix.lower()
-    if ext not in TABLES + (".zip",):
+    if ext not in TABLES + (".zip", ".json"):
         ext = ""
     stem = _COPY.sub("", name[:len(name) - len(ext)] if ext else name)
     stem = re.sub(r"^copy of\s+", "", stem, flags=re.I)
@@ -389,9 +406,26 @@ def _read_tokens(path, member, rows):
         if ext == ".dta":
             with pd.read_stata(src, iterator=True) as r:
                 return {squash(c) for c in r.variable_labels()}
+        if ext == ".json" and member is None:   # a Census API reply: a list of rows, the first one the header
+            table = _json_table(path)
+            return None if table is None else {squash(c) for c in table[0]} - {""}
     except Exception:
         return None
     return None
+
+
+def _json_table(path, limit=100e6):
+    """The rows of a Census API reply saved as JSON, or None when the file is something else
+    (an error page, a key request, a truncated download)."""
+    path = Path(path)
+    if path.stat().st_size > limit:
+        return None
+    try:
+        table = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except ValueError:
+        return None
+    ok = isinstance(table, list) and len(table) > 1 and all(isinstance(r, list) for r in table[:2])
+    return table if ok and all(isinstance(c, str) for c in table[0]) else None
 
 
 def _tokens(path, member=None, rows=15):
@@ -541,6 +575,32 @@ def find(key, year=None):
     return locate(key, year)["path"]
 
 
+def find_all(key, year=None):
+    """Every distinct file that fits input `key`, best first, as (path, member) pairs: for inputs
+    that may come as several files, such as ACS tables saved one year at a time. CONFIG[key] may
+    be one path or a list of paths; copies of the same download count once."""
+    s = spec(key, year)
+    want = CONFIG.get(key)
+    if want:
+        got = []
+        for p in (want if isinstance(want, (list, tuple)) else [want]):
+            p = Path(str(p)).expanduser()
+            if p.exists():
+                ok, member = _check(s, p, p.suffix.lower())
+                if ok is not False:
+                    got.append((p, member))
+        if got:
+            return got
+    items = _index()
+    hits = _candidates(s, items, by_name=True)[0] or _candidates(s, items, by_name=False)[0]
+    out, seen = [], set()
+    for h in hits:
+        if h["ident"] not in seen and h["path"].exists():
+            seen.add(h["ident"])
+            out.append((h["path"], h["member"]))
+    return out
+
+
 def missing_hint(key, year=None):
     """What to download and where to put it, for an input that was not found."""
     s = spec(key, year)
@@ -561,6 +621,9 @@ def file_table():
     for key, s in FILES.items():
         for y in (CONFIG["OEWS_YEARS"] if "{yy" in s["download_as"] else [None]):
             r = locate(key, y)
+            if s.get("many") and r["status"] == "AMBIGUOUS":     # several files are expected: all are read
+                n = len(find_all(key, y))
+                r.update(status="ok", note=(r["note"] + f" {n} files fit; all of them are read.").strip())
             rows.append({"input": key if y is None else f"{key} {y}", "key": key, "year": y,
                          "status": r["status"], "found_by": r["found_by"],
                          "path": "" if r["path"] is None else str(r["path"]), "member": r["member"] or "",
@@ -583,7 +646,8 @@ def show_files():
             log(f"{r.input}: more than one file fits; using {r.path}. Others: {r.alternatives}. "
                 f"Set CONFIG['{r.key}'] to choose.")
         if r.note:
-            log(f"{r.input}: {r.note} Using {r.path}.")
+            many = FILES[r.key].get("many")
+            log(f"{r.input}: {r.note}" + (f" Files: {r.path}; {r.alternatives}" if many else f" Using {r.path}."))
     return t
 
 
@@ -817,6 +881,34 @@ def cbsa_delineation():
     return cbsa, county
 
 
+STATE_FIPS = {"01": "AL", "02": "AK", "04": "AZ", "05": "AR", "06": "CA", "08": "CO", "09": "CT", "10": "DE",
+              "11": "DC", "12": "FL", "13": "GA", "15": "HI", "16": "ID", "17": "IL", "18": "IN", "19": "IA",
+              "20": "KS", "21": "KY", "22": "LA", "23": "ME", "24": "MD", "25": "MA", "26": "MI", "27": "MN",
+              "28": "MS", "29": "MO", "30": "MT", "31": "NE", "32": "NV", "33": "NH", "34": "NJ", "35": "NM",
+              "36": "NY", "37": "NC", "38": "ND", "39": "OH", "40": "OK", "41": "OR", "42": "PA", "44": "RI",
+              "45": "SC", "46": "SD", "47": "TN", "48": "TX", "49": "UT", "50": "VT", "51": "VA", "53": "WA",
+              "54": "WV", "55": "WI", "56": "WY", "72": "PR"}
+
+
+def principal_cities():
+    """Census List 2 as one row per (CBSA, principal city, state), or None when no file is found.
+    A metro's principal cities are more than the (up to three) cities in its title, which is what
+    lets a metro named after a city that is no longer first, or no longer in the title, be found."""
+    loc = locate("CBSA_PRINCIPAL_CITIES")
+    if loc["path"] is None:
+        return None
+    raw = read_table(loc["path"], loc["member"], header_hint="cbsacode")
+    code, city = pick(raw, "cbsacode"), pick(raw, contains=("principalcity",))
+    st = pick(raw, "fipsstatecode", "statefips", "fipsstate")
+    if code is None or city is None:
+        log(f"{loc['path'].name}: no 'CBSA Code' and 'Principal City Name' columns, so principal cities are not used")
+        return None
+    d = pd.DataFrame({"cbsa": digits(raw[code]), "city": raw[city].map(norm_city),
+                      "state": digits(raw[st]).str.zfill(2).map(STATE_FIPS) if st else None})
+    d = d[d.cbsa.str.fullmatch(r"\d{5}").fillna(False).astype(bool) & (d.city != "")]
+    return d.drop_duplicates().reset_index(drop=True)
+
+
 # ------------------------------------------------------------------- reading raw VRscores
 def sniff_delim(path):
     """VRscores ships .tab files that are comma separated; never trust the extension."""
@@ -929,6 +1021,192 @@ def party_regime(state):
     if state in MODELED_STATES:
         return "modelled by L2"
     return "party registration"
+
+
+def metro_matcher(ref, cities=None):
+    """A function match(name, code=None) -> (cbsa, cbsa_title, score, method) that finds a metro
+    of any delineation vintage in the reference list `ref` (columns cbsa, cbsa_title; List 1).
+
+    OMB redraws and renames metros every few years: VRscores and ACS 2012 use the 2009 metros,
+    Los Angeles was 31100 until 2013 and is 31080 now, and Anderson, IN became part of
+    Indianapolis. So a name, and a code when there is one, is tried in this order:
+      4 same code    the code is in `ref` and the names share a city
+      3 first city   the name's first city is a title's first city, in the name's first state
+      2 title city   the name shares a city with a title, in the name's first state
+      1 principal    a city of the name is a principal city (List 2, `cities`) of exactly one
+                     CBSA in one of the name's states ("Honolulu" also finds "Urban Honolulu")
+      0 not matched  typically a small metro that was absorbed by a bigger one and whose
+                     city is no longer a principal city (Madera, CA; Ocean City, NJ)
+    """
+    ref = ref.dropna(subset=["cbsa", "cbsa_title"]).drop_duplicates("cbsa")
+    title = dict(zip(ref.cbsa.astype(str), ref.cbsa_title))
+    parsed = {c: parse_msa(t) for c, t in title.items()}
+    by_state, principal, by_city = {}, {}, {}
+    for c, (_, sts) in parsed.items():
+        for s in sts:
+            by_state.setdefault(s, []).append(c)
+    if cities is not None:
+        for r in cities.dropna(subset=["cbsa", "city"]).itertuples(index=False):
+            if r.cbsa in title:
+                principal.setdefault(r.cbsa, set()).add(r.city)
+                by_city.setdefault(r.state, {}).setdefault(r.city, set()).add(r.cbsa)
+
+    def within(a, b):
+        """a's words appear, as whole words, in b."""
+        return bool(a) and bool(b) and f" {a} " in f" {b} "
+
+    def match(name, code=None):
+        cs, sts = parse_msa(name)
+        code = None if code is None or pd.isna(code) else str(code).strip()
+        if code in title:
+            known = set(parsed[code][0]) | principal.get(code, set())
+            if any(c in known or any(within(c, k) or within(k, c) for k in known) for c in cs):
+                return code, title[code], 4, "same code"
+        best, score = None, 0
+        for cand in by_state.get(sts[0] if sts else "", []):
+            tc = parsed[cand][0]
+            s = 3 if cs and tc and cs[0] == tc[0] else (2 if set(cs) & set(tc) else 0)
+            if s > score:
+                best, score = cand, s
+        if best is not None:
+            return best, title[best], score, "first city" if score == 3 else "title city"
+        for c in cs:
+            for s in sts:
+                places = by_city.get(s, {})
+                hit = places.get(c, set())
+                if not hit:
+                    hit = {k for pc, ks in places.items() if within(c, pc) or within(pc, c) for k in ks}
+                if len(hit) == 1:
+                    k = next(iter(hit))
+                    return k, title[k], 1, "principal city"
+        return None, None, 0, "not matched"
+
+    return match
+
+
+# ------------------------------------------------------------------- ACS metro tables
+ACS_VARS = {"B01003_001E": "population", "B19013_001E": "median_hh_income", "B23025_004E": "employed",
+            "B15003_022E": "bachelors", "B15003_001E": "pop25", "B01002_001E": "median_age"}
+ACS_YEARS = (2012, 2015, 2018, 2022, 2024)
+
+
+def _year_in_name(path):
+    years = set(re.findall(r"(?<!\d)((?:19|20)\d{2})(?!\d)", Path(str(path)).name))
+    return int(years.pop()) if len(years) == 1 else None
+
+
+def _acs_rows(df, source, year=None):
+    """One ACS table, as the Census API, data.census.gov or a script writes it, as acs_name,
+    acs_cbsa, year and the six variables; the Census codes for missing values (negative numbers)
+    become missing. None when the table is not an ACS metro table."""
+    name = pick(df, "name", "geographicareaname")
+    code = pick(df, "cbsa", "cbsacode", contains=("metropolitanstatisticalarea",))
+    geo = pick(df, "geoid", "geography")
+    yr = pick(df, "year")
+    lacking = [v for v in ACS_VARS if pick(df, squash(v)) is None]
+    if name is None or lacking or (code is None and geo is None):
+        log(f"ACS {source}: not an ACS metro table (it needs NAME, the CBSA code or GEO_ID, and "
+            f"{', '.join(ACS_VARS)}), so it is skipped")
+        return None
+    if yr is None and year is None:
+        log(f"ACS {source}: no year column and no single year in the file name, so it is skipped")
+        return None
+    cbsa = (digits(df[code]) if code is not None else df[geo].astype(str)).str.extract(r"(\d{5})\s*$")[0]
+    out = pd.DataFrame({"acs_name": df[name].astype(str).str.strip(), "acs_cbsa": cbsa,
+                        "year": pd.to_numeric(df[yr], errors="coerce") if yr is not None else year})
+    for v, col in ACS_VARS.items():
+        x = pd.to_numeric(df[pick(df, squash(v))], errors="coerce")
+        out[col] = x.where(x >= 0)
+    out["source"] = source
+    return out.dropna(subset=["acs_cbsa", "year"]).astype({"year": int})
+
+
+def read_acs():
+    """Every ACS metro row that can be found, one per ACS area and year: module 05's
+    acs1_<year>.json downloads and any ACS table saved by hand (CSV or Excel, one year or many
+    per file, any name, in the data folder). A download that is not a Census data table (an
+    error page, a request for an API key) is reported and skipped. None when there is nothing."""
+    files = find_all("ACS_METRO") + [(p, None) for p in sorted(Path(CONFIG["RAW"]).glob("acs1_*.json"))]
+    frames, seen = [], set()
+    for p, member in files:
+        ident = (str(Path(p).resolve()), member)
+        if ident in seen:
+            continue
+        seen.add(ident)
+        label = Path(p).name + (f" :: {member}" if member else "")
+        if Path(member or p).suffix.lower() == ".json":
+            table = _json_table(p)
+            if table is None:
+                head = Path(p).read_bytes()[:100].decode("utf-8", "replace").replace("\n", " ")
+                log(f"ACS {label}: not a Census data table (it starts '{head}'), so it is skipped. If module 05 "
+                    "saved it, the Census API refused the request: set CONFIG['CENSUS_API_KEY'] (free at "
+                    "api.census.gov/data/key_signup.html) and run module 05 again, or save the table as a CSV")
+                continue
+            df = pd.DataFrame(table[1:], columns=table[0])
+        else:
+            try:
+                df = read_table(p, member, header_hint="name")
+            except Exception as e:
+                log(f"ACS {label}: could not be read ({type(e).__name__}: {e}), so it is skipped")
+                continue
+        rows = _acs_rows(df, label, _year_in_name(member or p))
+        if rows is not None and len(rows):
+            frames.append(rows)
+    if not frames:
+        return None
+    d = pd.concat(frames, ignore_index=True)
+    repeated = int(d.duplicated(["acs_cbsa", "year"]).sum())
+    d = d.drop_duplicates(["acs_cbsa", "year"]).reset_index(drop=True)
+    d.attrs["files"] = len(frames)
+    log("ACS metro areas by year: " + ", ".join(f"{y} {n}" for y, n in d.groupby("year").size().items())
+        + f" (from {len(frames)} file(s)" + (f"; {repeated} rows in more than one file counted once" if repeated else "") + ")")
+    return d
+
+
+def load_acs_metro(ref=None, cities=None):
+    """ACS metro values on the reference CBSA codes, one row per (cbsa, year), and a table showing
+    where every ACS area-year went. Each ACS year uses the metros of its time (2012 the 2009
+    metros), so areas are matched to `ref` by code and name (metro_matcher). Areas that are one
+    CBSA today are added up: counts summed, the two medians weighted by population, acs_areas
+    saying how many were combined. Areas with no current CBSA are listed and dropped. Without
+    `ref` the ACS codes are used as they are. (None, None) when no ACS file is found."""
+    rows = read_acs()
+    if rows is None:
+        return None, None
+    if ref is None:
+        log("ACS: no CBSA reference, so the ACS codes are used as they are; metros whose code changed "
+            "between delineations will not merge")
+        rows = rows.assign(cbsa=rows.acs_cbsa, cbsa_title=None, match_score=4, match_method="code as is")
+    else:
+        match = metro_matcher(ref, cities)
+        keys = rows[["acs_cbsa", "acs_name"]].drop_duplicates()
+        got = pd.DataFrame([(c, n, *match(n, c)) for c, n in keys.itertuples(index=False)],
+                           columns=["acs_cbsa", "acs_name", "cbsa", "cbsa_title", "match_score", "match_method"])
+        rows = rows.merge(got, on=["acs_cbsa", "acs_name"], how="left")
+        lost = rows[rows.cbsa.isna()]
+        if len(lost):
+            big = lost.sort_values("population", ascending=False).drop_duplicates("acs_name").head(5)
+            log(f"ACS: {len(lost)} area-years ({lost.population.sum() / rows.population.sum():.1%} of the people) "
+                "have no current CBSA (areas later absorbed into bigger metros) and are dropped; largest: "
+                + "; ".join(f"{r.acs_name} {r.year}" for r in big.itertuples()))
+    m = rows.dropna(subset=["cbsa"]).assign(w_income=lambda d: d.median_hh_income * d.population,
+                                              w_age=lambda d: d.median_age * d.population)
+    agg = m.groupby(["cbsa", "year"]).agg(
+        acs_areas=("acs_cbsa", "nunique"), n=("acs_cbsa", "size"), population=("population", "sum"),
+        employed=("employed", "sum"), bachelors=("bachelors", "sum"), pop25=("pop25", "sum"),
+        n_edu=("bachelors", "count"), n_pop25=("pop25", "count"), w_income=("w_income", "sum"),
+        n_income=("w_income", "count"), w_age=("w_age", "sum"), n_age=("w_age", "count")).reset_index()
+    agg["share_bachelors"] = (agg.bachelors / agg.pop25).where((agg.n_edu == agg.n) & (agg.n_pop25 == agg.n))
+    agg["median_hh_income"] = (agg.w_income / agg.population).where(agg.n_income == agg.n)
+    agg["median_age"] = (agg.w_age / agg.population).where(agg.n_age == agg.n)
+    combined = int((agg.acs_areas > 1).sum())
+    if combined:
+        log(f"ACS: {combined} CBSA-years add up several areas of an older delineation "
+            "(counts summed, medians weighted by population)")
+    cols = ["cbsa", "year", "population", "median_hh_income", "employed", "median_age", "share_bachelors", "acs_areas"]
+    where = rows[["year", "acs_cbsa", "acs_name", "cbsa", "cbsa_title", "match_score", "match_method", "population", "source"]]
+    return (agg[cols].sort_values(["cbsa", "year"]).reset_index(drop=True),
+            where.sort_values(["year", "acs_cbsa"]).reset_index(drop=True))
 
 
 LEGAL_TAIL = {"inc", "incorporated", "corp", "corporation", "co", "company", "companies", "llc",

@@ -8,20 +8,26 @@ What it does: builds the four key tables every later merge uses.
   keys/cw_vrid_gvkey.csv   VRscores employer    -> gvkey, by name with evidence
 Why: merges fail silently when keys are built inline. Building them once, with a match
 score per row, makes every later join auditable.
-Expect: match rates near 97% for metros, 100% for occupations after dropping invalid
+Expect: match rates near 99% for metros, 100% for occupations after dropping invalid
 codes, 71% for industries, and roughly 35% of Compustat firms for the name match.
+Metros: VRscores names come from an older delineation ("Charlotte-Gastonia-Concord NC-SC
+MSA"), so they are matched by city and state to List 1's current titles, and, with List 2
+(principal cities), a metro whose city is no longer in any title is still found (Anderson,
+IN is part of Indianapolis now). polisy_core.metro_matcher explains the order; the
+crosswalk's match_method column says which rule found each metro.
 CBSA reference: the Census delineation file, List 1 (list1_2023.xlsx), found by
 polisy_core wherever it was saved and under whatever name ("list1_2023 (1).xlsx", an older
 list1_2020.xls, NBER's cbsa2fipsxw.csv). Its two title rows are skipped by finding the
 "CBSA Code" header. Without it the OEWS metro file stands in, which has no counties, so
 the election merge in module 06 is skipped.
-Diagnostics: review every metro row with match_score < 3 by hand once; check the firm
-match against DIPI (module 07).
+Diagnostics: review every metro row with match_score < 3 by hand once (the log lists the
+unmatched ones); check the firm match against DIPI (module 07).
 """
 import numpy as np
 import pandas as pd
 from polisy_core import (paths, con, log, save, q, parse_msa, party_regime, norm_name, vr_view,
-                         locate, missing_hint, read_table, pick, norm_gvkey, cbsa_delineation)
+                         locate, missing_hint, read_table, pick, norm_gvkey, cbsa_delineation,
+                         principal_cities, metro_matcher)
 
 try:
     from rapidfuzz import fuzz, process
@@ -56,7 +62,7 @@ def cbsa_reference(P):
     return None
 
 
-def build_metro_crosswalk(P, vr_msa_names, ref):
+def build_metro_crosswalk(P, vr_msa_names, ref, cities=None):
     names = pd.Series(vr_msa_names).dropna().astype(str).str.strip()
     if len(names) and names.str.fullmatch(r"\d{5}").all():       # the panel already carries CBSA codes
         cw = pd.DataFrame({"msa": names.unique()})
@@ -68,27 +74,28 @@ def build_metro_crosswalk(P, vr_msa_names, ref):
         cw.to_csv(P["KEYS"] / "cw_msa_cbsa.csv", index=False)
         log(f"metro crosswalk: codes, {cw.cbsa.notna().mean():.1%} found in the CBSA reference")
         return cw
-    parsed = ref.cbsa_title.map(parse_msa)
-    ref = ref.assign(cities=[p[0] for p in parsed], states=[p[1] for p in parsed])
-    by_state = {}
-    for r in ref.itertuples(index=False):
-        for s in r.states:
-            by_state.setdefault(s, []).append(r)
+    match = metro_matcher(ref, cities)
     rows = []
     for name in pd.Series(vr_msa_names).dropna().unique():
-        cities, states = parse_msa(name)
-        best, score = None, 0
-        for cand in by_state.get(states[0] if states else "", []):
-            s = 3 if cities and cand.cities and cities[0] == cand.cities[0] else (2 if set(cities) & set(cand.cities) else 0)
-            if s > score:
-                best, score = cand, s
-        rows.append({"msa": name, "cbsa": best.cbsa if best is not None else None,
-                     "cbsa_title": best.cbsa_title if best is not None else None,
-                     "match_score": score, "state": states[0] if states else None,
+        cbsa, title, score, how = match(name)
+        states = parse_msa(name)[1]
+        rows.append({"msa": name, "cbsa": cbsa, "cbsa_title": title, "match_score": score, "match_method": how,
+                     "state": states[0] if states else None,
                      "party_regime": party_regime(states[0] if states else None)})
     cw = pd.DataFrame(rows)
     cw.to_csv(P["KEYS"] / "cw_msa_cbsa.csv", index=False)
-    log(f"metro crosswalk: {cw.cbsa.notna().mean():.1%} matched, {(cw.match_score == 3).mean():.1%} on the principal city")
+    how = cw.match_method.value_counts()
+    log(f"metro crosswalk: {cw.cbsa.notna().mean():.1%} of {len(cw)} metros matched ("
+        + ", ".join(f"{k} {v}" for k, v in how.items()) + ")"
+        + ("" if cities is not None else "; without List 2 (principal cities) some renamed metros stay unmatched"))
+    miss = cw.loc[cw.cbsa.isna(), "msa"].tolist()
+    if miss:
+        log("metro crosswalk: not matched (usually absorbed into a bigger metro): " + "; ".join(miss[:12]))
+    shared = cw.dropna(subset=["cbsa"]).groupby("cbsa").msa.agg(list)
+    shared = shared[shared.map(len) > 1]
+    if len(shared):
+        log("metro crosswalk: older metros that are one CBSA today (they share its votes and ACS values): "
+            + "; ".join(" + ".join(v) for v in shared.head(8)))
     return cw
 
 
@@ -158,7 +165,11 @@ def main(year=2015):
     ref = cbsa_reference(P)
     if ref is not None and (P["CANONICAL"] / "vr_metro.parquet").exists():
         names = q(c, "SELECT DISTINCT unit AS msa FROM vr_metro").msa
-        build_metro_crosswalk(P, names, ref)
+        cities = principal_cities()
+        if cities is None:
+            log("principal cities: List 2 not found, so metros are matched on List 1 titles only. "
+                + missing_hint("CBSA_PRINCIPAL_CITIES"))
+        build_metro_crosswalk(P, names, ref, cities)
     if (P["CANONICAL"] / "vr_occupation.parquet").exists():
         occ = q(c, "SELECT DISTINCT unit AS onet_code FROM vr_occupation")
         occ["valid"] = occ.onet_code.str.match(r"^\d{2}-\d{4}")

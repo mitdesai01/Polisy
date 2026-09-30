@@ -11,32 +11,36 @@ Expect: four parquet files plus output/tables/06_merge_report.csv giving, for ea
 matched rows and the share of VRscores workers covered.
 Inputs come through polisy_core.locate (county returns, O*NET, AIOE), so their download
 names and folders do not matter; module 01 shows which files were used.
+ACS: every ACS metro table found (module 05's acs1_<year>.json downloads, or a CSV such as
+ACS_MSA_2012_2024.csv in your data folder) is put on today's CBSA codes, since each ACS year
+uses the metros of its time (polisy_core.load_acs_metro); canonical/acs_metro.parquet holds
+the result and output/tables/06_acs_cbsa_map.csv shows where every ACS area-year went. Each
+metro-year gets the latest ACS year at or before it (acs_year says which), as votes do.
 Diagnostics: every row of the merge report must carry a coverage share; anything below
 50% gets stated next to the result it produces.
 """
-import json
 import zipfile
 import numpy as np
 import pandas as pd
 from polisy_core import (paths, con, log, save, q, vr_view, locate, missing_hint, read_table, pick,
-                         digits)
-
-ACS_MAP = {"B01003_001E": "population", "B19013_001E": "median_hh_income", "B23025_004E": "employed",
-           "B15003_022E": "bachelors", "B15003_001E": "pop25_denom", "B01002_001E": "median_age"}
+                         digits, cbsa_delineation, principal_cities, load_acs_metro)
 
 
 def load_acs(P):
-    frames = []
-    for f in sorted(P["RAW"].glob("acs1_*.json")):
-        raw = json.loads(f.read_text())
-        df = pd.DataFrame(raw[1:], columns=raw[0]).rename(columns={**ACS_MAP, raw[0][-1]: "cbsa"})
-        for c in ACS_MAP.values():
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-        df["year"] = int(f.stem.split("_")[1])
-        df["share_bachelors"] = df.bachelors / df.pop25_denom
-        frames.append(df[["cbsa", "year", "population", "median_hh_income", "employed",
-                          "median_age", "share_bachelors"]])
-    return pd.concat(frames, ignore_index=True) if frames else None
+    """ACS metro values on today's CBSA codes, one row per (cbsa, year), or None when no ACS
+    file is found; also writes canonical/acs_metro.parquet and 06_acs_cbsa_map.csv."""
+    try:
+        got = cbsa_delineation()
+    except ValueError as e:
+        log(f"ACS: CBSA reference unusable ({e})")
+        got = None
+    acs, where = load_acs_metro(got[0] if got is not None else None, principal_cities())
+    if acs is None:
+        log("ACS: skipped. " + missing_hint("ACS_METRO"))
+        return None
+    acs.to_parquet(P["CANONICAL"] / "acs_metro.parquet", index=False)
+    save(where, "06_acs_cbsa_map", "every ACS area-year and the current CBSA it was matched to")
+    return acs
 
 
 def load_votes(P):
@@ -95,12 +99,17 @@ def main():
             log("metro panel: keys/cw_msa_cbsa.csv missing (module 04 needs a CBSA reference); "
                 "written without CBSA codes, so no ACS or vote merge")
             m = metro.assign(cbsa=pd.NA, state=pd.NA, party_regime=pd.NA, match_score=0)
-        acs = load_acs(P)
+        acs = load_acs(P) if m.cbsa.notna().any() else None
         if acs is not None:
-            m = m.merge(acs, on=["cbsa", "year"], how="left")
+            a = acs.rename(columns={"year": "acs_year"}).astype({"acs_year": "int64"})
+            m["cbsa"], a["cbsa"] = m.cbsa.astype(object), a.cbsa.astype(object)   # merge_asof wants one key dtype
+            m = pd.merge_asof(m.sort_values("year"), a.sort_values("acs_year"),
+                              left_on="year", right_on="acs_year", by="cbsa", direction="backward")
             report.append({"merge": "metro x ACS", "rows": len(m),
                            "matched": m.population.notna().sum(),
                            "worker_share": m.loc[m.population.notna(), "tp"].sum() / m.tp.sum()})
+            log(f"metro x ACS: {m.population.notna().mean():.1%} of metro-years, ACS years "
+                + ", ".join(str(int(y)) for y in sorted(acs.year.unique())))
         votes = load_votes(P) if m.cbsa.notna().any() else None
         if votes is not None:
             votes["year"] = votes.year.astype("int64")
