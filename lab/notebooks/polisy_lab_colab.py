@@ -193,6 +193,8 @@ if RUN_PATENT_LAYER:
     run_all(stages=("adapt", "link"), fetch=False, adapters=PATENT_LAYER)
     d = json.loads((LAB["RESULTS"] / "results.json").read_text())["diagnostics"]
     display(pd.DataFrame(d, columns=["step", "matched", "total", "share", "unit", "note"]).tail(12))
+else:
+    print("Step 6b is off: set RUN_PATENT_LAYER = True above and run this cell")
 
 # %%
 # 6c. Which jobs AI invention targets (Webb 2020): AI patents' titles and abstracts matched to O*NET tasks through
@@ -203,6 +205,8 @@ if RUN_TASK_MATCHING:
     subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_md"])
     LAB["SETTINGS"].update(webb_run=True, webb_processes=2)
     run_all(stages=("adapt", "link"), fetch=False, adapters=["patent_tasks"])
+else:
+    print("Step 6c is off: set RUN_TASK_MATCHING = True above and run this cell (after step 6b)")
 
 # %%
 # 7. Analyses: findings, graded, in the lab's reading order
