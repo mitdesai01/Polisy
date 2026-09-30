@@ -3,7 +3,7 @@
 DISCERN 2.0, Compustat, IPUMS USA and O*NET, for tests/infrastructure_test.py.
 
 They exercise code paths only: a few made-up rows per table, with the real file names, column names, quoting and
-formats (PatentsView's quoted TSV zips, Stata files keyed by permno_adj, an IPUMS CSV and a fixed-width extract with
+formats (PatentsView's quoted TSV zips, DISCERN's CSV files keyed by permno_adj, an IPUMS CSV and a fixed-width extract with
 its codebook). No result is ever computed from them.
 """
 import gzip
@@ -129,22 +129,42 @@ def build(D):
 
 
 def build_firms(D):
-    """DISCERN 2.0-like Stata files (a patent file keyed by permno_adj, the permno-gvkey file, the firm panel, subsidiary
-    names) and a Compustat extract."""
+    """DISCERN 2.0 in its published layout: CSV files keyed by permno_adj (the granted patents, the publications, the
+    subsidiary and ultimate-owner names with their owner spells spread over columns, a firm panel), a Stata
+    permno-gvkey file, WRDS's CRSP/Compustat Merged link table, and a Compustat extract carrying CRSP's LPERMNO."""
     d = D / "discern"
     d.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({"patent": [10000001.0, 10000002.0, 5500000.0], "permno_adj": [90319.0, 12490.0, 12490.0],
-                  "fyear": [2019, 2020, 1996]}).to_stata(d / "discern_pat_grant_1980_2021.dta", write_index=False)
-    pd.DataFrame({"permno_adj": [90319, 12490, 12490], "gvkey": ["160329", "006066", "006066"], "fyear": [2019, 2020, 1996]}
-                 ).to_stata(d / "permno_gvkey.dta", write_index=False)
-    pd.DataFrame({"gvkey": [160329, 6066], "fyear": [2019, 2020], "patents": [3000, 9000], "pubs": [100, 200], "sales": [1.0, 2.0],
-                  "rd": [0.1, 0.2], "emp": [100, 300], "at": [5, 6], "xrd": [1, 2], "conm": ["ALPHABET INC", "INTL BUSINESS MACHINES CORP"]}
-                 ).to_stata(d / "DISCERN_Panel_Data_1980_2021.dta", write_index=False)
-    pd.DataFrame({"permno_adj": [90319, 90319, 12490], "name": ["GOOGLE LLC", "ALPHABET INC", "IBM"]}
-                 ).to_stata(d / "DISCERN_SUB_name_list.dta", write_index=False)
+    ibm = "INTERNATIONAL BUSINESS MACHINES CORPORATION"
+    pd.DataFrame({"patent_id": ["10000001", "10000002", "5500000"], "patent_date": ["2019-06-18", "2020-01-07", "1996-03-05"],
+                  "assignee_name": ["GOOGLE LLC", ibm, ibm], "fyear": [2019, 2020, 1996],
+                  "name_std": ["GOOGLE", "INTERNATIONAL BUSINESS MACHINES", "INTERNATIONAL BUSINESS MACHINES"],
+                  "id_name": [11, 12, 12], "sample": ["compustat", "compustat", "compustat"],
+                  "permno_adj": [90319.0, 12490.0, 12490.0]}).to_csv(d / "discern_pat_grant_1980_2021.csv", index=False)
+    pd.DataFrame({"openalex_id": ["W100", "W200"], "earliest_pub_date": ["2019-01-01", "2020-01-01"],
+                  "openalex_date": ["2019-01-01", "2020-01-01"], "crossref_date": ["2019-01-02", "2020-01-02"],
+                  "fyear": [2019, 2020], "name_std": ["GOOGLE", "INTERNATIONAL BUSINESS MACHINES"], "id_name": [11, 12],
+                  "sample": ["compustat", "compustat"], "permno_adj": [90319, 12490], "doi": ["10.1/a", "10.1/b"]}
+                 ).to_csv(d / "discern_pub_1980_2021.csv", index=False)
+    # owner spells: Heckler & Koch held by one firm from 1991 for 24 years, then by another from 2015 (nyear a count here,
+    # a last year in the owner file: both are read)
+    pd.DataFrame({"id_name": [21, 22], "sample": ["compustat", "compustat"], "name_std": ["GOOGLE LLC", "HECKLER & KOCH GMBH"],
+                  "country_code": ["US", "DE"], "subdiv_code": ["US-CA", None], "fyear1": [2015, 1991], "nyear1": [7, 24],
+                  "permno_adj1": [90319, 77777], "fyear2": [None, 2015], "nyear2": [None, 7], "permno_adj2": [None, 88888]}
+                 ).to_csv(d / "discern_sub_names.csv", index=False)
+    pd.DataFrame({"id_name": [31, 32], "sample": ["compustat", "compustat"], "name_std": ["ALPHABET INC", "IBM"],
+                  "fyear1": [2015, 1980], "nyear1": [2021, 2021], "permno_adj1": [90319, 12490], "name_acq1": [None, None]}
+                 ).to_csv(d / "discern_uo_names.csv", index=False)
+    pd.DataFrame({"permno_adj": [90319, 12490], "fyear": [2019, 2020], "n_patents": [3000, 9000], "n_pubs": [100, 200],
+                  "name_std": ["ALPHABET INC", "IBM"]}).to_csv(d / "discern_panel_1980_2021.csv", index=False)
+    pd.DataFrame({"permno_adj": [90319, 12490, 12490, 77777, 88888], "gvkey": ["160329", "006066", "006066", "100001", "100002"],
+                  "fyear": [2019, 2020, 1996, 2000, 2019]}).to_stata(d / "permno_gvkey.dta", write_index=False)
+    pd.DataFrame({"gvkey": ["160329", "006066", "006066"], "linkprim": ["P", "P", "J"], "liid": ["01", "01", "02"],
+                  "linktype": ["LC", "LC", "LU"], "lpermno": [90319, 12490, 99999], "lpermco": [45483, 20990, 99999],
+                  "linkdt": ["20040819", "19620131", "19900101"], "linkenddt": ["E", "E", "19951231"]}
+                 ).to_csv(D / "ccmxpf_lnkhist.csv", index=False)
     pd.DataFrame({"gvkey": ["160329", "160329", "006066", "184996", "002993"], "fyear": [2019, 2023, 2022, 2023, 1977],
                   "conm": ["ALPHABET INC", "ALPHABET INC", "INTL BUSINESS MACHINES CORP", "TESLA INC", "COLT INDUSTRIES INC"],
-                  "sale": [1, 2, 3, 4, 5]}).to_csv(D / "Compustat_Final.csv", index=False)
+                  "LPERMNO": [90319, 90319, 12490, 93436, None], "sale": [1, 2, 3, 4, 5]}).to_csv(D / "Compustat_Final.csv", index=False)
     return D
 
 

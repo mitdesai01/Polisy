@@ -17,6 +17,9 @@
 #    the DIPI file, the Census `list1_2023.xlsx` and `list2_2023.xlsx`, and your ACS metro CSV if you have one.
 #    For the patent layer (steps 4b and 6b): your DISCERN 2.0 files go in `POLISY/data/discern`, and any PatentsView
 #    tables you already have (for example `g_patent.tsv`) in `POLISY/data/patentsview`; step 4b downloads the rest there.
+#    DISCERN names firms by `permno_adj`. When none of its files also carries `gvkey`, step 6b says so ("no file links
+#    the two"): then add WRDS's CRSP/Compustat Merged linking table (`ccmxpf_lnkhist`) to `POLISY/data`, or use a
+#    Compustat extract that has `LPERMNO`.
 #    An IPUMS extract (step 4c) lands in `POLISY/data/ipums`.
 # 3. The code is cloned from GitHub each time, so it is always the latest (a code zip in `POLISY`, such as GitHub's
 #    `polisy-main.zip`, is used only when cloning fails).

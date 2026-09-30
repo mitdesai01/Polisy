@@ -129,10 +129,13 @@ SOURCES = {
         "theme": "innovation", "publisher": "Arora, Belenzon & Sheer (Duke); DISCERN 2.0",
         "url": "https://zenodo.org/search?q=DISCERN%20Duke%20Innovation",
         "access": "your copy (the thesis used it); put the whole download in POLISY/data/discern. Every file in that folder is "
-                  "read and recognized by its columns",
+                  "read and recognized by its columns. DISCERN names firms by permno_adj; when none of its files carries "
+                  "gvkey as well, add WRDS's CRSP/Compustat Merged link table (ccmxpf_lnkhist) anywhere in POLISY/data",
         "grain": "patent -> firm (gvkey or permno_adj); firm-year panel; firm names", "keys": ["patent_id", "gvkey", "year"],
         "files": {"tables": {"names": r"discern", "folders": r"discern", "kinds": (".dta", ".csv", ".tsv", ".parquet", ".zip", ".txt"),
-                             "tokens": (), "many": True}}},
+                             "tokens": (), "many": True},
+                  "links": {"names": r"ccmxpf|lnkhist|ccm_?link|crsp_?compustat|permno_?gvkey|gvkey_?permno|linking_?table",
+                            "kinds": (".dta", ".csv", ".tsv", ".parquet", ".zip", ".txt", ".gz"), "tokens": (), "many": True}}},
     "ipums": {
         "title": "IPUMS USA: American Community Survey microdata (age, gender, race, education, sector, wages, work from "
                  "home and location of every occupation and industry)",
@@ -711,11 +714,12 @@ def profile_all():
     for s, meta in SOURCES.items():
         for role in meta["files"]:
             done = set()
+            cap = 8 if meta["files"][role].get("many") else 4     # a multi-file download (DISCERN) is shown whole
             for p, m in discover(s, role):
                 stem = Path(m or p).stem.lower()
                 if stem in done:                 # the same table in another format (e.g. .tsv, .dta and .xlsx)
                     continue
-                if len(done) >= 4:
+                if len(done) >= cap:
                     break
                 done.add(stem)
                 pr = profile_file(p, m)

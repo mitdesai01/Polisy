@@ -2,9 +2,12 @@
 """Patents -> firms (gvkey), and the firm-year patent panel.
 
 Which firm owns a patent comes from DISCERN 2.0 first: it follows subsidiaries and ownership changes, patent by
-patent, for Compustat firms and patents granted 1980-2021. Outside DISCERN's years (and for published applications)
-the owner comes from PatentsView's disambiguated assignee, matched by name to Compustat (and to DISCERN's subsidiary
-names when the download has them). The two are compared where both exist, so the name match's error rate is known.
+patent, for Compustat firms and patents granted 1980-2021. DISCERN names the owner by permno_adj, mapped to gvkey by
+year from a DISCERN file carrying both, else WRDS's CRSP/Compustat Merged link table, else Compustat's LPERMNO.
+Outside DISCERN's years (and for published applications) the owner comes from PatentsView's disambiguated assignee,
+matched by name to Compustat and to DISCERN's names (subsidiary and owner lists, with the years each firm held a
+name, and the assignee names on DISCERN's patents). The two are compared where both exist, so the name match's
+error rate is known.
 
 Canonical tables
   discern_patents     patent_id -> gvkey (and permno_adj), from DISCERN's patent-level file
@@ -29,6 +32,7 @@ Years before the data's first year + W are left empty (the firm's history is unk
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -84,25 +88,65 @@ def _columns_of(path, member):
             Path(tmp).unlink(missing_ok=True)
 
 
-def _classify(cols):
-    sq = [squash(x) for x in cols]
+PUB_NAMES = ["openalexid", "openalex", "doi", "pmid", "pmcid", "wosid", "magid"]      # scientific publications
+APP_NAMES = ["pgpubid", "documentnumber", "publicationnumber", "pubnumber", "pubno", "applicationid", "applicationnumber",
+             "appid", "applid", "appnumber", "appno"]                                  # published patent applications
+PERMNO_NAMES = ["permnoadj", "permno", "lpermno"]
+LINK_NAMES = {"linkdt", "linkenddt", "linktype", "linkprim"}                           # WRDS's CRSP-Compustat link table
+PAIR_SOURCES = {0: "DISCERN's own files", 1: "the CRSP-Compustat link table", 2: "Compustat's LPERMNO"}
+
+
+def _spells(cols):
+    """The owner spells a DISCERN name file spreads over columns (permno_adj1, fyear1, nyear1, permno_adj2, ...):
+    [(permno_adjK, fyearK, nyearK), ...] in the order of K, a year column None where the file lacks it."""
+    by = {}
+    for col in cols:
+        m = re.fullmatch(r"(permnoadj|fyear|nyear)(\d+)", squash(col))
+        if m:
+            by.setdefault(int(m.group(2)), {})[m.group(1)] = col
+    return [(v["permnoadj"], v.get("fyear"), v.get("nyear")) for _, v in sorted(by.items()) if "permnoadj" in v]
+
+
+def _classify(cols, fname=""):
+    """What a DISCERN table is, from its columns (and, for the firm panel, its file name):
+      patents       a patent number and its owner (discern_pat_grant_1980_2021)
+      publications  scientific articles (discern_pub_1980_2021): not used here
+      applications  published patent applications: not used here (an application gets its firm through its granted
+                    patent or its assignee's name, and the generative-AI wave comes after DISCERN's last year)
+      crosswalk     permno_adj <-> gvkey (DISCERN's permno-gvkey file, or WRDS's CRSP-Compustat link table)
+      panel         the firm-year panel
+      names         firm and subsidiary names, one owner per row, or owner spells spread over columns
+                    (discern_sub_names, discern_uo_names: permno_adj1, fyear1, nyear1, permno_adj2, ...)"""
+    sq = {squash(x) for x in cols}
     pat = sg.exact_col(cols, PAT_NAMES)
-    gv = sg.exact_col(cols, ["gvkey"]) or next((x for x, s in zip(cols, sq) if "gvkey" in s), None)
-    pn = sg.exact_col(cols, ["permnoadj", "permno"])
+    gv = sg.exact_col(cols, ["gvkey"]) or next((x for x in cols if "gvkey" in squash(x)), None)
+    pn = sg.exact_col(cols, PERMNO_NAMES)
     yr = sg.exact_col(cols, YEAR_NAMES)
     nm = sg.exact_col(cols, NAME_NAMES)
+    wide = _spells(cols)
     firm = gv or pn
+    f = fname.lower()
     if pat and firm:
-        kind = "patents"                                   # patent number and owner
-    elif gv and pn and not pat and not nm and len(cols) <= 8:
-        kind = "crosswalk"                                 # permno_adj <-> gvkey
-    elif firm and nm and not pat and len(cols) <= 5:
-        kind = "names"                                     # firm and subsidiary names
-    elif firm and yr and not pat:
-        kind = "panel"                                     # the firm-year panel
+        kind = "patents"
+    elif sg.exact_col(cols, PUB_NAMES):
+        kind = "publications"
+    elif firm and sg.exact_col(cols, APP_NAMES):
+        kind = "applications"
+    elif gv and pn and (sq & LINK_NAMES or (not nm and len(cols) <= 8)):
+        kind = "crosswalk"
+    elif firm and yr and re.search(r"panel|firm_?year", f):
+        kind = "panel"
+    elif nm and (wide or (firm and (len(cols) <= 5 or "name" in f))):
+        kind = "names"
+    elif firm and yr and gv:
+        kind = "panel"
     else:
         kind = None
-    return kind, {"patent": pat, "gvkey": gv, "permno": pn, "year": yr, "name": nm}
+    roles = {"patent": pat, "gvkey": gv, "permno": pn, "year": yr, "name": nm, "spells": wide,
+             "start": sg.exact_col(cols, ["linkdt"]), "end": sg.exact_col(cols, ["linkenddt"]),
+             "linktype": sg.exact_col(cols, ["linktype"]), "linkprim": sg.exact_col(cols, ["linkprim"]),
+             "sample": sg.exact_col(cols, ["sample"])}
+    return kind, roles
 
 
 def _gv(expr):
@@ -120,24 +164,92 @@ def _pid(expr):
     return f"CASE WHEN regexp_matches({v}, '^[0-9]+$') THEN ltrim({v}, '0') ELSE regexp_replace({v}, '[^A-Z0-9]', '', 'g') END"
 
 
+def _int(expr):
+    return f"try_cast(try_cast({expr} AS DOUBLE) AS INTEGER)"
+
+
+def _date_year(expr):
+    """The year of a date stored as 2001-05-31, 2001-05-31 00:00:00 or 20010531 (empty for WRDS's 'E', still active)."""
+    v = f"CAST({expr} AS VARCHAR)"
+    return f"year(coalesce(try_cast({v} AS TIMESTAMP), try_strptime({v}, '%Y%m%d')))"
+
+
+def _q(col):
+    return sg.pc_quote(col)
+
+
+def _n(n, word):
+    return f"{n:,} {word}{'' if n == 1 else 's'}"
+
+
+def _pairs(view, r, pri):
+    """(permno, gvkey, year, pri) from a table carrying both ids: by the table's own year, by every year of a link's
+    date range (WRDS's link table, primary links only), or without a year."""
+    pn, gv = _pn(f"t.{_q(r['permno'])}"), _gv(f"t.{_q(r['gvkey'])}")
+    where = [f"t.{_q(r['linktype'])} IN ('LU', 'LC')"] if r.get("linktype") else []
+    where += [f"t.{_q(r['linkprim'])} IN ('P', 'C')"] if r.get("linkprim") else []
+    w = (" WHERE " + " AND ".join(where)) if where else ""
+    if r.get("start"):
+        y0 = _date_year(f"t.{_q(r['start'])}")
+        y1 = f"coalesce({_date_year('t.' + _q(r['end']))}, year(current_date))" if r.get("end") else "year(current_date)"
+        return f"SELECT {pn} AS permno, {gv} AS gvkey, unnest(range({y0}, {y1} + 1)) AS year, {pri} AS pri FROM {view} t{w}"
+    yr = _int(f"t.{_q(r['year'])}") if r["year"] else "NULL::INTEGER"
+    return f"SELECT {pn} AS permno, {gv} AS gvkey, {yr} AS year, {pri} AS pri FROM {view} t{w}"
+
+
+def _compustat_permnos(c):
+    """(permno, gvkey, year, pri) from the Compustat file when it carries CRSP's LPERMNO (a CCM extract), else None."""
+    loc = pc.locate("COMPUSTAT")
+    if loc["path"] is None:
+        return None
+    rd, tmp = sg.readable(loc["path"], loc["member"])
+    try:
+        cols = sg.columns(c, rd)
+        pn = sg.exact_col(cols, ["lpermno", "permno"])
+        gv = sg.exact_col(cols, ["gvkey"])
+        fy = sg.exact_col(cols, ["fyear", "year"])
+        if not (pn and gv):
+            return None
+        yr = _int(_q(fy)) if fy else "NULL::INTEGER"
+        c.execute(f"CREATE OR REPLACE TABLE comp_pn AS SELECT DISTINCT {_pn(_q(pn))} AS permno, {_gv(_q(gv))} AS gvkey, "
+                  f"{yr} AS year, 2 AS pri FROM {rd}")
+        return "SELECT * FROM comp_pn"
+    finally:
+        if tmp is not None:
+            Path(tmp).unlink(missing_ok=True)
+
+
 def adapt_discern():
+    for old in (canon("discern_patents"), canon("discern_firm_year"), sg.staged_path("discern", "names")):
+        Path(old).unlink(missing_ok=True)          # never keep a result from an earlier, different DISCERN download
     files = discover("discern", "tables")
     if not files:
-        log("discern: not found. Put the DISCERN 2.0 download (its .dta or .csv files) in POLISY/data/discern; without it "
+        log("discern: not found. Put the DISCERN 2.0 download (its .csv or .dta files) in POLISY/data/discern; without it "
             "patents are linked to firms by assignee name only")
         return False
+    links = [f for f in discover("discern", "links") if f not in files]
     tables = {"patents": [], "panel": [], "crosswalk": [], "names": []}
-    for path, member in files:
+    for path, member in files + links:
+        fname = Path(member or path).name
         try:
             cols = _columns_of(path, member)
         except Exception as e:
-            log(f"discern: cannot read {Path(member or path).name} ({type(e).__name__}: {e})")
+            log(f"discern: cannot read {fname} ({type(e).__name__}: {e})")
             continue
-        kind, roles = _classify(cols)
-        log(f"discern: {Path(member or path).name}: " + (f"{kind} table ({', '.join(f'{k}={v}' for k, v in roles.items() if v)})"
-                                                         if kind else f"not used (columns {cols[:8]})"))
-        if kind:
+        kind, roles = _classify(cols, fname)
+        roles["origin"] = "link" if (path, member) in links else "discern"
+        if roles["origin"] == "link" and kind != "crosswalk":
+            kind = None
+        shown = {("owner_spells" if k == "spells" else k): (len(v) if k == "spells" else v) for k, v in roles.items()
+                 if v and k != "origin"}
+        what = {"publications": "scientific publications, not used here",
+                "applications": "published applications, not used here (they get their firm through the granted patent "
+                                "or the assignee name)"}
+        log(f"discern: {fname}: " + (f"{kind} table ({', '.join(f'{k}={v}' for k, v in shown.items())})" if kind in tables
+                                     else what.get(kind, f"not used (columns {cols[:8]})")))
+        if kind in tables:
             tables[kind].append((path, member, roles))
+    tables["panel"].sort(key=lambda t: not re.search(r"panel", Path(t[1] or t[0]).name.lower()))   # a file named panel first
     c = sg.con()
     try:
         for kind, found in tables.items():             # stage each table (Stata files become Parquet once)
@@ -151,60 +263,106 @@ def adapt_discern():
                     if tmp is not None:
                         Path(tmp).unlink(missing_ok=True)
                 _view(c, f"d_{kind}_{i}", out)
-        # permno_adj -> gvkey (by year where the table has one), from a crosswalk file or any table carrying both
-        pairs = [f"SELECT {_pn(sg.pc_quote(r['permno']))} AS permno, {_gv(sg.pc_quote(r['gvkey']))} AS gvkey, "
-                 + (f"try_cast({sg.pc_quote(r['year'])} AS INTEGER)" if r["year"] else "NULL::INTEGER") + f" AS year FROM d_{k}_{i}"
+        # permno_adj -> gvkey: DISCERN's own files first, then WRDS's link table, then Compustat's LPERMNO; one gvkey per
+        # permno_adj and year (pg), and the one it has most years (pg1) for rows without a year or outside the table's years
+        pairs = [_pairs(f"d_{k}_{i}", r, 0 if r["origin"] == "discern" else 1)
                  for k in ("crosswalk", "panel", "patents", "names") for i, (_, _, r) in enumerate(tables[k]) if r["permno"] and r["gvkey"]]
+        comp = _compustat_permnos(c)
+        pairs += [comp] if comp else []
         c.execute("CREATE OR REPLACE TABLE pg AS " + (
-            "SELECT permno, gvkey, year, count(*) AS n FROM (" + " UNION ALL ".join(pairs) + ") WHERE gvkey IS NOT NULL AND permno IS NOT NULL GROUP BY ALL"
-            if pairs else "SELECT NULL::VARCHAR AS permno, NULL::VARCHAR AS gvkey, NULL::INTEGER AS year, 0::BIGINT AS n WHERE FALSE"))
-        c.execute("CREATE OR REPLACE TABLE pg1 AS SELECT permno, arg_max(gvkey, n) AS gvkey FROM "
-                  "(SELECT permno, gvkey, sum(n) AS n FROM pg GROUP BY 1, 2) GROUP BY 1")
+            f"""SELECT permno, year, arg_min(gvkey, pri * 1e12 - n) AS gvkey, min(pri) AS pri
+                FROM (SELECT permno, gvkey, year, min(pri) AS pri, count(*) AS n FROM ({' UNION ALL '.join(pairs)})
+                      WHERE permno IS NOT NULL AND gvkey IS NOT NULL GROUP BY permno, gvkey, year)
+                GROUP BY permno, year""" if pairs else
+            "SELECT NULL::VARCHAR AS permno, NULL::INTEGER AS year, NULL::VARCHAR AS gvkey, 0 AS pri WHERE FALSE"))
+        c.execute("""CREATE OR REPLACE TABLE pg1 AS SELECT permno, arg_min(gvkey, pri * 1e12 - n) AS gvkey
+                     FROM (SELECT permno, gvkey, min(pri) AS pri, count(*) AS n FROM pg GROUP BY 1, 2) GROUP BY 1""")
+        by = dict(c.execute("SELECT pri, count(*) FROM (SELECT permno, min(pri) AS pri FROM pg GROUP BY 1) GROUP BY 1").fetchall())
+        log("discern: permno_adj -> gvkey for " + (f"{_n(sum(by.values()), 'firm')}: " + ", ".join(
+            f"{n:,} {'from' if k == min(by) else 'more from'} {PAIR_SOURCES[k]}" for k, n in sorted(by.items()))
+            if by else "no firm: no file links the two"))
 
         def firm_of(alias, r):
             """SQL (gvkey, joins) for a DISCERN table row: its own gvkey, else its permno_adj through pg (same year) or pg1."""
             if r["gvkey"]:
-                return _gv(f"{alias}.{sg.pc_quote(r['gvkey'])}"), ""
-            pn = _pn(f"{alias}.{sg.pc_quote(r['permno'])}")
-            yr = f"try_cast({alias}.{sg.pc_quote(r['year'])} AS INTEGER)" if r["year"] else "NULL"
+                return _gv(f"{alias}.{_q(r['gvkey'])}"), ""
+            pn = _pn(f"{alias}.{_q(r['permno'])}")
+            yr = _int(f"{alias}.{_q(r['year'])}") if r["year"] else "NULL"
             return ("coalesce(x1.gvkey, x2.gvkey)",
                     f" LEFT JOIN pg x1 ON x1.permno = {pn} AND x1.year = {yr} LEFT JOIN pg1 x2 ON x2.permno = {pn}")
         wrote = False
         parts = []
         for i, (_, _, r) in enumerate(tables["patents"]):
-            if not r["gvkey"] and not pairs:
-                log("discern: the patent file has permno_adj but no gvkey, and no table maps permno_adj to gvkey; add DISCERN's "
-                    "permno-gvkey file to the folder")
-                continue
             gv, joins = firm_of("t", r)
-            yr = f"try_cast(t.{sg.pc_quote(r['year'])} AS INTEGER)" if r["year"] else "NULL::INTEGER"
-            pn = _pn(f"t.{sg.pc_quote(r['permno'])}") if r["permno"] else "NULL::VARCHAR"
-            parts.append(f"SELECT {_pid('t.' + sg.pc_quote(r['patent']))} AS patent_id, {gv} AS gvkey, {pn} AS permno_adj, "
+            yr = _int(f"t.{_q(r['year'])}") if r["year"] else "NULL::INTEGER"
+            pn = _pn(f"t.{_q(r['permno'])}") if r["permno"] else "NULL::VARCHAR"
+            parts.append(f"SELECT {_pid('t.' + _q(r['patent']))} AS patent_id, {gv} AS gvkey, {pn} AS permno_adj, "
                          f"{yr} AS discern_year FROM d_patents_{i} t{joins}")
         if parts:
-            n = _copy(c, "SELECT DISTINCT * FROM (" + " UNION ALL ".join(parts) + ") WHERE patent_id <> '' AND gvkey IS NOT NULL",
-                      "discern_patents")
-            k = c.execute(f"SELECT count(DISTINCT patent_id), count(DISTINCT gvkey), min(discern_year), max(discern_year) "
-                          f"FROM read_parquet('{pc.sqlp(canon('discern_patents'))}')").fetchone()
-            log(f"discern: {k[0]:,} patents owned by {k[1]:,} firms" + (f", years {k[2]}-{k[3]}" if k[2] else ""))
-            wrote = n > 0
+            c.execute("CREATE OR REPLACE TABLE dpa AS SELECT DISTINCT * FROM (" + " UNION ALL ".join(parts) + ") WHERE patent_id <> ''")
+            tot, got = c.execute("SELECT count(DISTINCT patent_id), count(DISTINCT patent_id) FILTER (WHERE gvkey IS NOT NULL) "
+                                 "FROM dpa").fetchone()
+            diagnostic("DISCERN patents -> gvkey", "discern patents", "permno_adj -> gvkey", "permno_adj, year", got, tot, "patents")
+            if got:
+                _copy(c, "SELECT * FROM dpa WHERE gvkey IS NOT NULL", "discern_patents")
+                k = c.execute("SELECT count(DISTINCT gvkey), min(discern_year), max(discern_year) FROM dpa WHERE gvkey IS NOT NULL").fetchone()
+                log(f"discern: {got:,} of {tot:,} patents ({got / tot:.1%}) owned by {k[0]:,} Compustat firms"
+                    + (f", years {k[1]}-{k[2]}" if k[1] else ""))
+                wrote = True
+            if got < tot:
+                c.execute("CREATE OR REPLACE TABLE dmiss AS SELECT * FROM dpa WHERE patent_id NOT IN "
+                          "(SELECT patent_id FROM dpa WHERE gvkey IS NOT NULL)")
+                nopn = pc.q1(c, "SELECT count(DISTINCT patent_id) FROM dmiss WHERE permno_adj IS NULL")
+                miss = pc.q(c, "SELECT permno_adj, count(DISTINCT patent_id) AS patents FROM dmiss WHERE permno_adj IS NOT NULL "
+                               "GROUP BY 1 ORDER BY 2 DESC LIMIT 5")
+                log(f"discern: {_n(tot - got, 'patent')} without a gvkey"
+                    + (f"; {nopn:,} of them have no permno_adj" if nopn else "")
+                    + (f"; owners (permno_adj) with the most: {', '.join(f'{a} ({b:,})' for a, b in miss.itertuples(index=False))}"
+                       if len(miss) else "")
+                    + ("" if by else ". Nothing links permno_adj to gvkey: add WRDS's CRSP/Compustat Merged link table "
+                       "(ccmxpf_lnkhist, with gvkey, lpermno, linkdt, linkenddt) to POLISY/data, or use a Compustat extract "
+                       "with LPERMNO"))
+            for i, (_, _, r) in enumerate(tables["patents"]):
+                if r.get("sample"):                     # which of DISCERN's samples the patents come from, for the record
+                    s = pc.q(c, f"SELECT CAST({_q(r['sample'])} AS VARCHAR) AS v, count(*) AS n FROM d_patents_{i} "
+                                "GROUP BY 1 ORDER BY 2 DESC LIMIT 6")
+                    log("discern: patents by DISCERN's sample column: " + ", ".join(f"{a} {b:,}" for a, b in s.itertuples(index=False)))
         if tables["panel"]:
             _, _, r = tables["panel"][0]
             gv, joins = firm_of("t", r)
-            drop = ", ".join(sg.pc_quote(x) for x in (r["year"], r["gvkey"]) if x)
-            _copy(c, f"""SELECT * FROM (SELECT {gv} AS gvkey, try_cast(t.{sg.pc_quote(r['year'])} AS INTEGER) AS year,
+            drop = ", ".join(_q(x) for x in (r["year"], r["gvkey"]) if x)
+            _copy(c, f"""SELECT * FROM (SELECT {gv} AS gvkey, {_int('t.' + _q(r['year']))} AS year,
                                                t.* EXCLUDE ({drop}) FROM d_panel_0 t{joins})
                          WHERE gvkey IS NOT NULL AND year IS NOT NULL
                          QUALIFY row_number() OVER (PARTITION BY gvkey, year) = 1""", "discern_firm_year")
-        if tables["names"]:
-            parts = []
-            for i, (_, _, r) in enumerate(tables["names"]):
+        parts = []                                     # names for the assignee name match, with the years each firm held them
+        for i, (_, _, r) in enumerate(tables["patents"]):
+            if r["name"]:                              # the assignee names on the patents DISCERN gives each firm
                 gv, joins = firm_of("t", r)
-                parts.append(f"SELECT {gv} AS gvkey, CAST(t.{sg.pc_quote(r['name'])} AS VARCHAR) AS name FROM d_names_{i} t{joins}")
-            c.execute("CREATE OR REPLACE TABLE dn AS SELECT DISTINCT * FROM (" + " UNION ALL ".join(parts) + ") "
-                      "WHERE gvkey IS NOT NULL AND name IS NOT NULL")
-            c.execute(f"COPY dn TO '{pc.sqlp(sg.staged_path('discern', 'names'))}' (FORMAT parquet)")
-            log(f"discern: {pc.q1(c, 'SELECT count(*) FROM dn'):,} firm and subsidiary names for the assignee name match")
+                yr = _int(f"t.{_q(r['year'])}") if r["year"] else "NULL::INTEGER"
+                parts.append(f"SELECT {gv} AS gvkey, CAST(t.{_q(r['name'])} AS VARCHAR) AS name, {yr} AS fy0, {yr} AS fy1 "
+                             f"FROM d_patents_{i} t{joins}")
+        for i, (_, _, r) in enumerate(tables["names"]):
+            name = f"CAST(t.{_q(r['name'])} AS VARCHAR)"
+            if r["spells"]:                            # one row per owner spell: the name, that owner, its years
+                for pn_col, fy_col, ny_col in r["spells"]:
+                    fy = _int(f"t.{_q(fy_col)}") if fy_col else "NULL::INTEGER"
+                    ny = _int(f"t.{_q(ny_col)}") if ny_col else "NULL::INTEGER"
+                    last = f"CASE WHEN {ny} >= 1800 THEN {ny} WHEN {ny} >= 1 THEN {fy} + {ny} - 1 END"  # a year or a count
+                    parts.append(f"SELECT x.gvkey, {name} AS name, {fy} AS fy0, {last} AS fy1 FROM d_names_{i} t "
+                                 f"JOIN pg1 x ON x.permno = {_pn('t.' + _q(pn_col))}")
+            else:
+                gv, joins = firm_of("t", r)
+                yr = _int(f"t.{_q(r['year'])}") if r["year"] else "NULL::INTEGER"
+                parts.append(f"SELECT {gv} AS gvkey, {name} AS name, {yr} AS fy0, {yr} AS fy1 FROM d_names_{i} t{joins}")
+        if parts:
+            c.execute("CREATE OR REPLACE TABLE dn AS SELECT gvkey, name, min(fy0) AS fy0, max(fy1) AS fy1 FROM ("
+                      + " UNION ALL ".join(parts) + ") WHERE gvkey IS NOT NULL AND name IS NOT NULL AND name <> '' GROUP BY 1, 2")
+            n_names, n_firms = c.execute("SELECT count(DISTINCT name), count(DISTINCT gvkey) FROM dn").fetchone()
+            if n_names:
+                c.execute(f"COPY dn TO '{pc.sqlp(sg.staged_path('discern', 'names'))}' (FORMAT parquet)")
+                log(f"discern: {_n(n_names, 'name')} (firms, subsidiaries and the assignees on DISCERN's patents) of "
+                    f"{_n(n_firms, 'Compustat firm')} for the assignee name match")
         return wrote
     finally:
         sg.close(c)
@@ -263,7 +421,10 @@ def match_assignees():
     firms = _compustat_names()
     dn = sg.staged_path("discern", "names")
     if dn.exists():
-        extra = pd.read_parquet(dn).assign(fy0=np.nan, fy1=np.nan, source="discern names")
+        extra = pd.read_parquet(dn).assign(source="discern names")
+        for col in ("fy0", "fy1"):
+            if col not in extra:
+                extra[col] = np.nan
         firms = extra if firms is None else pd.concat([firms, extra], ignore_index=True)
     if firms is None or firms.empty:
         log("firm names: no Compustat file (POLISY_DA's COMPUSTAT input) and no DISCERN names, so assignees cannot be "
@@ -277,13 +438,16 @@ def match_assignees():
     a["name_norm"] = a.org.map(pc.norm_name)
     firms["name_norm"] = firms.name.map(pc.norm_name)
     firms = firms[firms.name_norm.str.len() >= 3]
-    span = firms.groupby("gvkey").agg(fy0=("fy0", "min"), fy1=("fy1", "max"))
     lut = firms.groupby("name_norm").gvkey.agg(lambda s: sorted(set(s)))
+    spans = {}                                  # for names several firms held: the years each held it
+    shared = firms[firms.name_norm.isin(lut.index[lut.map(len) > 1])]
+    for (n, g), y in shared.groupby(["name_norm", "gvkey"]).agg(fy0=("fy0", "min"), fy1=("fy1", "max")).iterrows():
+        spans.setdefault(n, {})[g] = (y.fy0, y.fy1)
     rows = []
     for r in a.itertuples(index=False):
         cands = lut.get(r.name_norm)
         if cands:
-            best = _by_years(cands, r.y0, r.y1, span)
+            best = _by_years(cands, r.y0, r.y1, spans.get(r.name_norm, {}))
             rows.append((r.assignee_id, r.org, r.name_norm, best, "exact", 100.0, len(cands) > 1, r.docs))
     got = {x[0] for x in rows}
     min_score = float(LAB["SETTINGS"].get("name_min_score", 95))
@@ -301,7 +465,7 @@ def match_assignees():
             hit = process.extractOne(r.name_norm, pool[idx], scorer=fuzz.token_sort_ratio, score_cutoff=min_score)
             if hit:
                 cands = lut[hit[0]]
-                rows.append((r.assignee_id, r.org, r.name_norm, _by_years(cands, r.y0, r.y1, span), "fuzzy", float(hit[1]),
+                rows.append((r.assignee_id, r.org, r.name_norm, _by_years(cands, r.y0, r.y1, spans.get(hit[0], {})), "fuzzy", float(hit[1]),
                              len(cands) > 1, r.docs))
     except ImportError:
         log("firm names: pip install rapidfuzz for fuzzy name matches (exact matches only for now)")
@@ -319,18 +483,20 @@ def match_assignees():
 
 
 def _by_years(cands, y0, y1, span):
-    """Among firms sharing a name, the one whose Compustat years overlap the assignee's patenting years most."""
+    """Among firms that held the same name (a subsidiary sold from one to another, two firms of one name), the one that
+    held it last within the assignee's patenting years y0-y1, which owns the recent patents the name match fills in
+    after DISCERN's last year; then the one that held it longest. span: {gvkey: (first, last year)}. Firms whose years
+    are unknown come after those that overlap, firms that never overlap last."""
     if len(cands) == 1:
         return cands[0]
-    best, score = cands[0], -1e9
-    for g in cands:
-        if g not in span.index or pd.isna(span.at[g, "fy0"]) or pd.isna(y0):
-            s = 0
-        else:
-            s = min(y1, span.at[g, "fy1"]) - max(y0, span.at[g, "fy0"])
-        if s > score:
-            best, score = g, s
-    return best
+
+    def key(g):
+        f0, f1 = span.get(g, (np.nan, np.nan))
+        if pd.isna(y0) or pd.isna(y1) or pd.isna(f0) or pd.isna(f1):
+            return (1, 0, 0)
+        overlap = min(y1, f1) - max(y0, f0)
+        return (2, min(y1, f1), overlap) if overlap >= 0 else (0, overlap, 0)
+    return max(cands, key=key)
 
 
 # --------------------------------------------------------------------------- patent -> firm

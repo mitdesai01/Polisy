@@ -63,7 +63,20 @@ def main():
              for r in S.SOURCES[s]["files"]}
     missing = [f"{s}/{r}" for (s, r), f in roles.items() if not f and r != "cpc_title" and not (s == "patentsview_pregrant" and r == "location")]
     ok.append(check(not missing, f"every new source and role found ({len(roles)} roles; missing: {missing or 'none'})"))
-    ok.append(check(len(roles[("discern", "tables")]) == 4, "all four DISCERN files found through their folder"))
+    ok.append(check(len(roles[("discern", "tables")]) == 6, "all six DISCERN files found through their folder"))
+    from polisy_lab.adapters import firms as F
+    sub = ["id_name", "sample", "name_std", "country_code", "subdiv_code"] + [f"{x}{k}" for k in range(1, 9) for x in ("fyear", "nyear", "permno_adj")]
+    uo = ["id_name", "sample", "name_std"] + [f"{x}{k}" for k in range(1, 7) for x in ("fyear", "nyear", "permno_adj", "name_acq")]
+    kinds = [F._classify(c, f)[0] for c, f in [
+        (["patent_id", "patent_date", "assignee_name", "fyear", "name_std", "id_name", "sample", "permno_adj"], "discern_pat_grant_1980_2021.csv"),
+        (["openalex_id", "earliest_pub_date", "openalex_date", "crossref_date", "fyear", "name_std", "id_name", "sample", "permno_adj"], "discern_pub_1980_2021.csv"),
+        (sub, "discern_sub_names.csv"), (uo, "discern_uo_names.csv"),
+        (["gvkey", "linkprim", "liid", "linktype", "lpermno", "lpermco", "linkdt", "linkenddt", "conm"], "ccmxpf_lnkhist.csv")]]
+    ok.append(check(kinds == ["patents", "publications", "names", "names", "crosswalk"] and len(F._classify(sub)[1]["spells"]) == 8,
+                    "DISCERN 2.0's real layouts: patents, publications (skipped), names with 8 owner spells, WRDS link table"))
+    ok.append(check(F._by_years(["100001", "100002"], 1995, 2023, {"100001": (1980, 2014), "100002": (2015, 2021)}) == "100002"
+                    and F._by_years(["a", "b"], 2000, 2005, {"a": (1990, 2010), "b": (2011, 2020)}) == "a",
+                    "a name two firms held goes to the one that held it last within the assignee's years"))
     ok.append(check(Path(roles[("ipums", "data")][0][0]).name == "usa_00001.csv.gz" and roles[("ipums", "ddi")],
                     "the IPUMS extract (.csv.gz) and its codebook (.xml) found"))
 
@@ -97,12 +110,21 @@ def main():
 
     dp = read("discern_patents").set_index("patent_id")
     ok.append(check(dp.gvkey.to_dict() == {"10000001": "160329", "10000002": "006066", "5500000": "006066"},
-                    "DISCERN: patent numbers stored as numbers, owners from permno_adj through the permno-gvkey file"))
+                    "DISCERN: owners from permno_adj (stored as 90319.0) through the permno-gvkey file, by year"))
+    fy = read("discern_firm_year").set_index(["gvkey", "year"])
+    ok.append(check(sorted(fy.index) == [("006066", 2020), ("160329", 2019)] and fy.n_patents[("006066", 2020)] == "9000",
+                    "DISCERN's firm panel keyed by permno_adj gets its gvkey"))
+    dn = pd.read_parquet(Path(LAB["STAGED"]) / "discern" / "names.parquet").set_index(["gvkey", "name"])
+    ok.append(check(tuple(dn.loc[("100001", "HECKLER & KOCH GMBH")]) == (1991, 2014) and tuple(dn.loc[("100002", "HECKLER & KOCH GMBH")]) == (2015, 2021)
+                    and tuple(dn.loc[("160329", "ALPHABET INC")]) == (2015, 2021),
+                    "DISCERN names: every owner spell, its years from a count (sub names) or a last year (owner names)"))
     ag = read("assignee_gvkey").set_index("assignee_id")
-    ok.append(check(ag.gvkey.get("as-ibm") == "006066" and ag.gvkey.get("as-goog") == "160329" and "as-oai" not in ag.index,
-                    "names: IBM matched to Compustat's INTL BUSINESS MACHINES, Google to Alphabet through DISCERN's names"))
+    ok.append(check(ag.gvkey.get("as-ibm") == "006066" and ag.gvkey.get("as-goog") == "160329" and "as-oai" not in ag.index
+                    and ag.gvkey.get("as-hk") == "100002",
+                    "names: IBM matched to Compustat's INTL BUSINESS MACHINES, Google through DISCERN's names, Heckler & Koch "
+                    "to its later owner"))
     pf = read("patent_firm").set_index("patent_id")
-    ok.append(check(pf.link.to_dict() == {"10000001": "discern", "10000002": "discern", "11000006": "name"},
+    ok.append(check(pf.link.to_dict() == {"10000001": "discern", "10000002": "discern", "10000005": "name", "11000006": "name"},
                     "patent -> firm: DISCERN first, the name match after DISCERN's last year"))
     fp = read("firm_patents_year", "PANELS").set_index(["gvkey", "year"])
     ibm18, ibm20 = fp.loc[("006066", 2018)], fp.loc[("006066", 2020)]
@@ -120,6 +142,28 @@ def main():
     pfy = read("panel_firm_year", "PANELS").set_index(["gvkey", "year"])
     ok.append(check(pfy.loc[("006066", 2020)].vr_workers == 900 and pfy.loc[("006066", 2020)].dipi_empLiberalism_10yr == 0.4,
                     "panel_firm_year joins the VRscores workforce (POLISY_DA) and DIPI"))
+
+    # DISCERN without a permno-gvkey file: WRDS's link table (primary links, by year), else Compustat's LPERMNO
+    import polisy_core as pc
+    d = D / "discern"
+    only = [d / "discern_pat_grant_1980_2021.csv", d / "discern_pub_1980_2021.csv", d / "discern_sub_names.csv", d / "discern_uo_names.csv"]
+    want = {"10000001": "160329", "10000002": "006066", "5500000": "006066"}
+    pc.CONFIG.update(LAB_DISCERN_TABLES=only, LAB_DISCERN_LINKS=[D / "ccmxpf_lnkhist.csv"])
+    F.adapt_discern()
+    via_ccm = read("discern_patents").set_index("patent_id").gvkey.to_dict()
+    pc.CONFIG.update(LAB_DISCERN_LINKS=[only[1]])           # no link table: only Compustat's LPERMNO is left
+    F.adapt_discern()
+    via_comp = read("discern_patents").set_index("patent_id").gvkey.to_dict()
+    bare = WORK / "elsewhere" / "Compustat_Final.csv"          # a Compustat extract without LPERMNO, outside the search folders
+    bare.parent.mkdir(exist_ok=True)
+    pd.read_csv(D / "Compustat_Final.csv").drop(columns="LPERMNO").to_csv(bare, index=False)
+    pc.CONFIG["COMPUSTAT"] = str(bare)
+    F.adapt_discern()
+    kept = (Path(LAB["CANONICAL"]) / "discern_patents.parquet").exists()
+    for k in ("LAB_DISCERN_TABLES", "LAB_DISCERN_LINKS", "COMPUSTAT"):
+        pc.CONFIG[k] = None
+    ok.append(check(via_ccm == want and via_comp == want and not kept,
+                    "no permno-gvkey file: WRDS's link table, else Compustat's LPERMNO; with neither, no DISCERN table is kept"))
 
     occ = read("acs_occupation").set_index("occsoc")
     ok.append(check(abs(occ.female["151252"] - 2 / 3) < 1e-9 and abs(occ.graduate["151252"] - 1 / 3) < 1e-9

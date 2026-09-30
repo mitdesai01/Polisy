@@ -30,7 +30,7 @@ flowchart LR
 1. **Raw.** Files as they were downloaded, in `MyDrive/POLISY/data` (and its subfolders one level down). Nothing is
    renamed or unzipped by hand: every input is found by its name and by the columns in its header, also inside zips
    (`polisy_lab/sources.py`, the `SOURCES` registry).
-2. **Staged.** The big tables (PatentsView, the AI Patent Dataset, DISCERN's Stata files, citations) are converted once
+2. **Staged.** The big tables (PatentsView, the AI Patent Dataset, DISCERN's files, citations) are converted once
    to Parquet with only the columns used (`polisy_lab/staging.py`). A stamp records the source file's name, size and
    date, so a staged table is rebuilt only when its source changes. Multi-gigabyte files are read once, not at every
    run. Zipped tables are unzipped to Colab's local disk while being read.
@@ -53,7 +53,8 @@ pipeline runs in a standard Colab session.
 | PatentsView, granted patents | Every US patent granted since 1976 with its classes, inventors, places and owners (USPTO) | `patentsview/g_patent`, `g_application`, `g_cpc_current`, `g_inventor_disambiguated`, `g_location_disambiguated`, `g_assignee_disambiguated`, `g_cpc_title`, `g_patent_abstract`, `g_us_patent_citation` (.tsv or .tsv.zip) | notebook step 4b tries PatentsView's server, which has refused scripted downloads since September 2026; then download them by hand from the [Data Download Tables pages](https://patentsview.org/download/data-download-tables) | `patent_id` |
 | PatentsView, pre-grant publications | Published patent applications (published 18 months after filing, whether or not later granted) | `patentsview/pg_published_application`, `pg_cpc_current`, `pg_inventor_disambiguated`, `pg_location_disambiguated`, `pg_assignee_disambiguated`, `pg_granted_pgpubs_crosswalk`, `pg_published_application_abstract` | step 4b | `pgpub_id` |
 | USPTO AI Patent Dataset (AIPD) | The USPTO's machine-learning classification of every patent and published application into eight AI components (Giczy, Pairolero and Toole 2022; 2023 update) | `aipd/ai_model_predictions` (.csv or zip) | step 4b tries the USPTO page; otherwise download it by hand | document number |
-| DISCERN 2.0 | Which Compustat firm owns each patent, following subsidiaries and ownership changes, patents granted 1980-2021 (Arora, Belenzon and Sheer) | every file of the download in `discern/` | your copy (used in the thesis) | patent number, `permno_adj`, `gvkey` |
+| DISCERN 2.0 | Which Compustat firm owns each patent, following subsidiaries and ownership changes, patents granted 1980-2021 (Arora, Belenzon and Sheer) | every file of the download in `discern/` (`discern_pat_grant_1980_2021`, `discern_sub_names`, `discern_uo_names`, the firm panel; `discern_pub_1980_2021`, the publications, is not used) | your copy (used in the thesis) | patent number, `permno_adj` |
+| CRSP/Compustat Merged link table | `permno_adj` -> `gvkey` when no DISCERN file carries both (WRDS, `ccmxpf_lnkhist`: primary links LU/LC, P/C, by year of the link's dates) | any name containing `ccmxpf`, `lnkhist`, `ccm_link` or `permno_gvkey` | WRDS | `lpermno`, `gvkey` |
 | Compustat | Firm financials and company names (WRDS) | `Compustat_Final.csv` | your copy | `gvkey` |
 | DIPI | Political ideology of CEOs, top teams and employees from donations (Mannor and Busenbark) | `Organizational_Leadership_File.csv` | your copy | `gvkey`, year |
 | VRscores | Party registration of 24.5 million workers by employer, occupation, industry and metro, 2012-2024 (Kagan, Frake and Hurst) | the four Dataverse zips | your copy; POLISY_DA builds the panels | employer name, SOC, NAICS, metro |
@@ -94,8 +95,8 @@ The keys, and how each link is made:
 | Link | How | What can go wrong, and how it is checked |
 |---|---|---|
 | published application -> patent | `pg_granted_pgpubs_crosswalk` | applications not granted (yet) have no patent: kept as pending |
-| patent -> firm (gvkey) | DISCERN 2.0's patent-level file first. Where DISCERN has only `permno_adj`, its permno-gvkey file maps it to `gvkey`, by year when it can | DISCERN ends with patents granted in 2021 |
-| patent -> firm after DISCERN | The patent's assignee (PatentsView's disambiguated organization) matched by name to Compustat names and DISCERN's subsidiary names. Names are normalized the same way as the VRscores employer match (`polisy_core.norm_name`). Exact matches first, then fuzzy at 95 of 100 or more for assignees with 5 or more documents; a name shared by several firms goes to the firm whose Compustat years overlap the assignee's patenting years | the log reports how often the name match agrees with DISCERN where both link a patent, and how many of DISCERN's patents it finds: the name match's error rate, measured |
+| patent -> firm (gvkey) | DISCERN 2.0's patent-level file first. It names the owner by `permno_adj`, which is mapped to `gvkey` by year, from the first of: a DISCERN file carrying both, WRDS's CRSP/Compustat Merged link table, the `LPERMNO` column of the Compustat file (each fills only the firm-years the ones before it leave open). The log reports the share of DISCERN's patents that get a `gvkey` and the owners that do not | DISCERN ends with patents granted in 2021 |
+| patent -> firm after DISCERN | The patent's assignee (PatentsView's disambiguated organization) matched by name to Compustat names and DISCERN's names: its subsidiary and ultimate-owner lists (each owner spell of a name, `permno_adj1`, `fyear1`, `nyear1`, `permno_adj2`, ..., with its years) and the assignee names on the patents it gives each firm. Names are normalized the same way as the VRscores employer match (`polisy_core.norm_name`). Exact matches first, then fuzzy at 95 of 100 or more for assignees with 5 or more documents; a name several firms held (a subsidiary sold, two firms of one name) goes to the firm that held it last within the assignee's patenting years, the owner of the recent patents the name match fills in | the log reports how often the name match agrees with DISCERN where both link a patent, and how many of DISCERN's patents it finds: the name match's error rate, measured |
 | published application -> firm | its patent's link once granted; else the assignee name | pending applications rely on names only |
 | firm -> VRscores workforce | POLISY_DA module 04 (employer names to Compustat) | module 07 validates against DIPI |
 | inventor -> place | `g_location_disambiguated`: state and county FIPS; the state from the postal code when the FIPS code is missing | inventors abroad are counted in a patent's inventors but not placed |
@@ -270,6 +271,7 @@ In the Colab notebook (`lab/notebooks/POLISY_AI_Innovation_Lab.ipynb`), after st
 | 6c | `RUN_TASK_MATCHING = True` | the task matching | an hour or more the first time (parsing); cached and resumable |
 
 Steps 6b and 6c print what to check: the number of utility patents and the share with a filing year, AIPD coverage,
+which DISCERN file was read as what (lines starting `discern:`) and the share of DISCERN's patents given a `gvkey`,
 the agreement between DISCERN and the name match, the share of company-assigned patents linked to a firm, and the
 share of AI inventions matched to at least one occupation. The diagnostics table (step 6) has every link's coverage.
 
