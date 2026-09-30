@@ -95,8 +95,8 @@ The keys, and how each link is made:
 | Link | How | What can go wrong, and how it is checked |
 |---|---|---|
 | published application -> patent | `pg_granted_pgpubs_crosswalk` | applications not granted (yet) have no patent: kept as pending |
-| patent -> firm (gvkey) | DISCERN 2.0's patent-level file first. It names the owner by `permno_adj`, which is mapped to `gvkey` by year, from the first of: a DISCERN file carrying both, WRDS's CRSP/Compustat Merged link table, the `LPERMNO` column of the Compustat file (each fills only the firm-years the ones before it leave open). The log reports the share of DISCERN's patents that get a `gvkey` and the owners that do not | DISCERN ends with patents granted in 2021 |
-| patent -> firm after DISCERN | The patent's assignee (PatentsView's disambiguated organization) matched by name to Compustat names and DISCERN's names: its subsidiary and ultimate-owner lists (each owner spell of a name, `permno_adj1`, `fyear1`, `nyear1`, `permno_adj2`, ..., with its years) and the assignee names on the patents it gives each firm. Names are normalized the same way as the VRscores employer match (`polisy_core.norm_name`). Exact matches first, then fuzzy at 95 of 100 or more for assignees with 5 or more documents; a name several firms held (a subsidiary sold, two firms of one name) goes to the firm that held it last within the assignee's patenting years, the owner of the recent patents the name match fills in | the log reports how often the name match agrees with DISCERN where both link a patent, and how many of DISCERN's patents it finds: the name match's error rate, measured |
+| patent -> firm (gvkey) | DISCERN 2.0's patent-level files first: `discern_pat_grant_1980_2021` (the owner when the patent was granted, grants of 1980-2021) and `discern_pat_app_1980_2021` (the owner when it was filed, applications of 1980-2021, some granted after 2021). Where the two differ (a firm bought between filing and grant) the owner at filing is used, since the panel counts patents by filing year (`discern_owner`); the log counts these patents. DISCERN names the owner by `permno_adj`, which is mapped to `gvkey` by year, from the first of: a DISCERN file carrying both, WRDS's CRSP/Compustat Merged link table, the `LPERMNO` column of the Compustat file (each fills only the firm-years the ones before it leave open). The log reports the share of DISCERN's patents that get a `gvkey` and the owners that do not | DISCERN ends with patents granted in 2021 |
+| patent -> firm after DISCERN | Grants after the last year of DISCERN's grant file (2021) that DISCERN does not link: the patent's assignee (PatentsView's disambiguated organization) matched by name to Compustat names and DISCERN's names: its subsidiary and ultimate-owner lists (each owner spell of a name, `permno_adj1`, `fyear1`, `nyear1`, `permno_adj2`, ..., with its years) and the assignee names on the patents it gives each firm. Names are normalized the same way as the VRscores employer match (`polisy_core.norm_name`). Exact matches first, then fuzzy at 95 of 100 or more for assignees with 5 or more documents; a name several firms held (a subsidiary sold, two firms of one name) goes to the firm that held it last within the assignee's patenting years, the owner of the recent patents the name match fills in | measured out of sample: the name list as it stood three years before DISCERN's last grant year, scored against DISCERN on the grants of those three years (the share of DISCERN's patents it finds, and how often it names DISCERN's firm). That is its error rate on the grants after DISCERN |
 | published application -> firm | its patent's link once granted; else the assignee name | pending applications rely on names only |
 | firm -> VRscores workforce | POLISY_DA module 04 (employer names to Compustat) | module 07 validates against DIPI |
 | inventor -> place | `g_location_disambiguated`: state and county FIPS; the state from the postal code when the FIPS code is missing | inventors abroad are counted in a patent's inventors but not placed |
@@ -132,7 +132,9 @@ The keys, and how each link is made:
 
 ### 5.3 The firm-year panel
 
-`firm_patents_year` (also `results/tables/firm_patents_year.csv` and `.dta`), one row per `gvkey` and filing year:
+`firm_patents_year` (also `results/tables/firm_patents_year.csv` and `.dta`), one row per `gvkey` and filing year. In
+the Stata file, names longer than Stata's 32 characters are shortened by fixed abbreviations (Liberalism -> Lib,
+Employee -> Emp, Alignment -> Align, ...) and keep the full name as their variable label:
 
 | Column | Meaning |
 |---|---|
@@ -209,8 +211,9 @@ filing (`app_year`), as Philip asked. Two consequences:
 A patent is **exploratory** when its main CPC subclass (the first listed) appears on none of the firm's patents filed
 in the previous W years (`explore_window`, 5). `new_subclasses` counts the subclasses the firm used in the year but
 not in the window. A firm without patents in the window (`prior_patents` = 0) has only exploratory patents by this
-definition, so condition on `prior_patents` > 0 where that matters. Years before the data's first year plus W are
-left empty, because the firm's history is unknown.
+definition, so condition on `prior_patents` > 0 where that matters. PatentsView starts with the patents granted in
+1976, so earlier filing years are incomplete: the panel starts in 1976, and exploration and search are left empty
+before 1976 plus W (1981), because the firm's history is not in the data.
 
 ### 6.5 Search depth and scope (Katila and Ahuja 2002)
 
@@ -272,13 +275,13 @@ In the Colab notebook (`lab/notebooks/POLISY_AI_Innovation_Lab.ipynb`), after st
 
 Steps 6b and 6c print what to check: the number of utility patents and the share with a filing year, AIPD coverage,
 which DISCERN file was read as what (lines starting `discern:`) and the share of DISCERN's patents given a `gvkey`,
-the agreement between DISCERN and the name match, the share of company-assigned patents linked to a firm, and the
+how often DISCERN's two files disagree on the owner, the name match's out-of-sample agreement with DISCERN, the share of company-assigned patents linked to a firm, and the
 share of AI inventions matched to at least one occupation. The diagnostics table (step 6) has every link's coverage.
 
 Settings the team may want to change are in `LAB["SETTINGS"]` (`polisy_lab/core.py`): `ai_label`, `aipd_threshold`,
-`explore_window`, `name_fill` (when the name match may fill in for DISCERN: after its last year, for any patent it
-leaves unlinked, or never), `name_min_score`, `webb_text`, `webb_abstract_words`, `webb_model`, `webb_periods`,
-`webb_generic_share`.
+`explore_window`, `name_fill` (when the name match may fill in for DISCERN: after its last grant year, for any patent
+it leaves unlinked, or never), `discern_owner` (a patent's owner at filing or at grant), `name_min_score`,
+`webb_text`, `webb_abstract_words`, `webb_model`, `webb_periods`, `webb_generic_share`.
 
 ## 8. Choices and limits
 
@@ -287,9 +290,10 @@ leaves unlinked, or never), `name_min_score`, `webb_text`, `webb_abstract_words`
   its log lines are the first real check.
 - **Fractional counts.** A patent with inventors in two counties counts half in each; one owned by two firms counts
   half for each.
-- **The name match is a fallback.** It misses subsidiaries whose names differ from the parent's (DISCERN's name list
-  helps) and can link a patent to a firm that merely shares a name. Its agreement with DISCERN, reported at every
-  run, says how far to trust it after 2021.
+- **The name match is a fallback.** It misses subsidiaries whose names differ from the parent's (DISCERN's name lists
+  help) and can link a patent to a firm that merely shares a name. Its agreement with DISCERN, measured out of sample
+  at every run (names as known three years before DISCERN ends, scored on those three years), says how far to trust
+  it after 2021.
 - **Label coverage.** The AIPD covers documents up to its last update; later documents fall back to the CPC rules in
   the task matching (the firm panel keeps the labels apart).
 - **Parser errors.** spaCy's English models misread some sentences (a verb taken for a noun, an object attached to

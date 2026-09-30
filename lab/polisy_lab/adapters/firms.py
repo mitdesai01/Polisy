@@ -109,7 +109,8 @@ def _spells(cols):
 
 def _classify(cols, fname=""):
     """What a DISCERN table is, from its columns (and, for the firm panel, its file name):
-      patents       a patent number and its owner (discern_pat_grant_1980_2021)
+      patents       a patent number and its owner: at grant (discern_pat_grant_1980_2021) or at filing
+                    (discern_pat_app_1980_2021, patents applied for in those years)
       publications  scientific articles (discern_pub_1980_2021): not used here
       applications  published patent applications: not used here (an application gets its firm through its granted
                     patent or its assignee's name, and the generative-AI wave comes after DISCERN's last year)
@@ -132,10 +133,10 @@ def _classify(cols, fname=""):
         kind = "publications"
     elif firm and sg.exact_col(cols, APP_NAMES):
         kind = "applications"
-    elif gv and pn and (sq & LINK_NAMES or (not nm and len(cols) <= 8)):
-        kind = "crosswalk"
     elif firm and yr and re.search(r"panel|firm_?year", f):
         kind = "panel"
+    elif gv and pn and (sq & LINK_NAMES or (not nm and len(cols) <= 8)):
+        kind = "crosswalk"
     elif nm and (wide or (firm and (len(cols) <= 5 or "name" in f))):
         kind = "names"
     elif firm and yr and gv:
@@ -146,6 +147,8 @@ def _classify(cols, fname=""):
              "start": sg.exact_col(cols, ["linkdt"]), "end": sg.exact_col(cols, ["linkenddt"]),
              "linktype": sg.exact_col(cols, ["linktype"]), "linkprim": sg.exact_col(cols, ["linkprim"]),
              "sample": sg.exact_col(cols, ["sample"])}
+    if kind == "patents":
+        roles["dated"] = "app" if re.search(r"app", f) and "grant" not in f else "grant"
     return kind, roles
 
 
@@ -297,7 +300,7 @@ def adapt_discern():
             yr = _int(f"t.{_q(r['year'])}") if r["year"] else "NULL::INTEGER"
             pn = _pn(f"t.{_q(r['permno'])}") if r["permno"] else "NULL::VARCHAR"
             parts.append(f"SELECT {_pid('t.' + _q(r['patent']))} AS patent_id, {gv} AS gvkey, {pn} AS permno_adj, "
-                         f"{yr} AS discern_year FROM d_patents_{i} t{joins}")
+                         f"{yr} AS discern_year, '{r.get('dated', 'grant')}' AS discern_file FROM d_patents_{i} t{joins}")
         if parts:
             c.execute("CREATE OR REPLACE TABLE dpa AS SELECT DISTINCT * FROM (" + " UNION ALL ".join(parts) + ") WHERE patent_id <> ''")
             tot, got = c.execute("SELECT count(DISTINCT patent_id), count(DISTINCT patent_id) FILTER (WHERE gvkey IS NOT NULL) "
@@ -416,8 +419,14 @@ def _assignees():
         sg.close(c)
 
 
-def match_assignees():
-    """assignee_gvkey: company assignees -> gvkey by normalized name (exact), then fuzzy for the unmatched."""
+_ASSIGNEES = {}
+
+
+def _dictionary(cutoff=None):
+    """Firm names for the name match, with the years each firm held each name: Compustat's (its fiscal years) and
+    DISCERN's (owner spells of subsidiary and owner names, and the assignee names on the patents it gives each firm).
+    cutoff: only what was known by that year (names first held later left out, later years cut), for the
+    out-of-sample check."""
     firms = _compustat_names()
     dn = sg.staged_path("discern", "names")
     if dn.exists():
@@ -427,17 +436,18 @@ def match_assignees():
                 extra[col] = np.nan
         firms = extra if firms is None else pd.concat([firms, extra], ignore_index=True)
     if firms is None or firms.empty:
-        log("firm names: no Compustat file (POLISY_DA's COMPUSTAT input) and no DISCERN names, so assignees cannot be "
-            "matched to firms by name")
-        return False
-    a = _assignees()
-    if a is None or a.empty:
-        log("firm names: no assignees (g_assignee_disambiguated) to match")
-        return False
-    a = a[a.atype.isin([2, 3]) | a.atype.isna()].copy()          # companies, US and foreign
-    a["name_norm"] = a.org.map(pc.norm_name)
+        return None
+    firms = firms.copy()
+    if cutoff is not None:
+        firms = firms[firms.fy0.isna() | (firms.fy0 <= cutoff)].copy()
+        firms["fy1"] = firms.fy1.clip(upper=cutoff)
     firms["name_norm"] = firms.name.map(pc.norm_name)
-    firms = firms[firms.name_norm.str.len() >= 3]
+    return firms[firms.name_norm.str.len() >= 3]
+
+
+def _match(firms, a):
+    """Company assignees -> gvkey by normalized name: exact, then fuzzy for the unmatched (assignees with 5+ documents);
+    a name several firms held goes to the one that held it last within the assignee's years (_by_years)."""
     lut = firms.groupby("name_norm").gvkey.agg(lambda s: sorted(set(s)))
     spans = {}                                  # for names several firms held: the years each held it
     shared = firms[firms.name_norm.isin(lut.index[lut.map(len) > 1])]
@@ -465,13 +475,32 @@ def match_assignees():
             hit = process.extractOne(r.name_norm, pool[idx], scorer=fuzz.token_sort_ratio, score_cutoff=min_score)
             if hit:
                 cands = lut[hit[0]]
-                rows.append((r.assignee_id, r.org, r.name_norm, _by_years(cands, r.y0, r.y1, spans.get(hit[0], {})), "fuzzy", float(hit[1]),
-                             len(cands) > 1, r.docs))
+                rows.append((r.assignee_id, r.org, r.name_norm, _by_years(cands, r.y0, r.y1, spans.get(hit[0], {})), "fuzzy",
+                             float(hit[1]), len(cands) > 1, r.docs))
     except ImportError:
         log("firm names: pip install rapidfuzz for fuzzy name matches (exact matches only for now)")
     m = pd.DataFrame(rows, columns=["assignee_id", "assignee_org", "name_norm", "gvkey", "method", "score", "ambiguous", "docs"])
     name = firms.drop_duplicates("gvkey").set_index("gvkey").name
     m["firm_name"] = m.gvkey.map(name)
+    return m
+
+
+def match_assignees():
+    """assignee_gvkey: company assignees -> gvkey by normalized name (exact), then fuzzy for the unmatched."""
+    firms = _dictionary()
+    dn = sg.staged_path("discern", "names")
+    if firms is None:
+        log("firm names: no Compustat file (POLISY_DA's COMPUSTAT input) and no DISCERN names, so assignees cannot be "
+            "matched to firms by name")
+        return False
+    a = _assignees()
+    if a is None or a.empty:
+        log("firm names: no assignees (g_assignee_disambiguated) to match")
+        return False
+    a = a[a.atype.isin([2, 3]) | a.atype.isna()].copy()          # companies, US and foreign
+    a["name_norm"] = a.org.map(pc.norm_name)
+    _ASSIGNEES["a"] = a
+    m = _match(firms, a)
     m.to_parquet(canon("assignee_gvkey"), index=False)
     share = m.docs.sum() / max(a.docs.sum(), 1)
     log(f"canonical assignee_gvkey: {len(m):,} company assignees matched to {m.gvkey.nunique():,} firms "
@@ -480,6 +509,36 @@ def match_assignees():
     diagnostic("assignees -> Compustat firms (names)", "assignee_gvkey", "Compustat names" + (" + DISCERN names" if dn.exists() else ""),
                "normalized company name", int(m.docs.sum()), int(a.docs.sum()), "company-assigned documents")
     return True
+
+
+def _holdout(c, last, years=3):
+    """How well the name match does on patents it has not seen: the name list as it stood in last - years (names first
+    held later left out, ownership cut at that year), matched to the assignees of the patents DISCERN links in the
+    following years, and compared with DISCERN. This is the name match's error rate for the grants after DISCERN."""
+    a = _ASSIGNEES.get("a")
+    ga = sg.staged_path("patentsview", "g_assignee_disambiguated")
+    cutoff = int(last) - years
+    firms = _dictionary(cutoff)
+    if a is None or firms is None or not ga.exists():
+        return
+    m = _match(firms, a)
+    c.register("mh_df", m[["assignee_id", "gvkey"]])
+    c.execute(f"""CREATE OR REPLACE TABLE nh AS SELECT DISTINCT s.patent_id, h.gvkey
+                  FROM read_parquet('{pc.sqlp(ga)}') s JOIN mh_df h USING (assignee_id) JOIN p USING (patent_id)
+                  WHERE p.year > {cutoff} AND p.year <= {last}""")
+    c.unregister("mh_df")
+    tot, found, agree = c.execute(f"""
+        WITH ev AS (SELECT DISTINCT dl.patent_id FROM dl JOIN p USING (patent_id) WHERE p.year > {cutoff} AND p.year <= {last})
+        SELECT count(*), count(*) FILTER (WHERE patent_id IN (SELECT patent_id FROM nh)),
+               count(*) FILTER (WHERE patent_id IN (SELECT n.patent_id FROM nh n JOIN dl d USING (patent_id, gvkey)))
+        FROM ev""").fetchone()
+    if not tot:
+        return
+    log(f"patent_firm: out of sample (names as known in {cutoff}, DISCERN's grants of {cutoff + 1}-{last}): the name match "
+        f"finds {found / tot:.1%} of DISCERN's {tot:,} patents and names DISCERN's firm for {agree / max(found, 1):.1%} of those it finds")
+    diagnostic("name match agrees with DISCERN (out of sample)", "patent_firm (name)", "discern_patents", "patent_id", agree, found,
+               "patents both link", note=f"names as known in {cutoff}, grants {cutoff + 1}-{last}; the name match finds "
+                                         f"{found / tot:.1%} of DISCERN's patents")
 
 
 def _by_years(cands, y0, y1, span):
@@ -515,12 +574,26 @@ def adapt_patent_firms():
         _view(c, "p", pats)
         if have_d:
             _view(c, "d", canon("discern_patents"))
-            c.execute("CREATE OR REPLACE TABLE dl AS SELECT DISTINCT d.patent_id, d.gvkey FROM d JOIN p USING (patent_id)")
-            last = pc.q1(c, "SELECT max(p.year) FROM dl JOIN p USING (patent_id)")
-            first = pc.q1(c, "SELECT min(p.year) FROM dl JOIN p USING (patent_id)")
+            dfile = "d.discern_file" if "discern_file" in sg.columns(c, "d") else "'grant'"
+            c.execute(f"CREATE OR REPLACE TABLE dall AS SELECT DISTINCT d.patent_id, d.gvkey, {dfile} AS f FROM d JOIN p USING (patent_id)")
+            owner = LAB["SETTINGS"].get("discern_owner", "filing")
+            pref = "app" if owner == "filing" else "grant"
+            c.execute(f"""CREATE OR REPLACE TABLE dl AS SELECT patent_id, gvkey FROM (
+                              SELECT patent_id, gvkey, dense_rank() OVER (PARTITION BY patent_id ORDER BY (f = '{pref}') DESC) AS r
+                              FROM dall) WHERE r = 1""")
+            both, same = c.execute("""SELECT (SELECT count(*) FROM (SELECT patent_id FROM dall GROUP BY 1 HAVING count(DISTINCT f) = 2)),
+                                             (SELECT count(DISTINCT a.patent_id) FROM dall a JOIN dall b
+                                              ON a.patent_id = b.patent_id AND a.gvkey = b.gvkey AND a.f = 'grant' AND b.f = 'app')""").fetchone()
+            if both:
+                log(f"patent_firm: {both:,} patents are in both DISCERN's grant- and application-dated files; the owner differs "
+                    f"for {both - same:,} ({(both - same) / both:.1%}: sold between filing and grant); the owner at {owner} is used "
+                    "(LAB SETTINGS discern_owner: 'filing' or 'grant')")
+            # DISCERN covers every grant up to the last year of its grant-dated file; later grants only where it has them
+            last = pc.q1(c, "SELECT max(p.year) FROM dall JOIN p USING (patent_id) WHERE f = 'grant'") or \
+                pc.q1(c, "SELECT max(p.year) FROM dl JOIN p USING (patent_id)")
         else:
             c.execute("CREATE OR REPLACE TABLE dl AS SELECT NULL::VARCHAR AS patent_id, NULL::VARCHAR AS gvkey WHERE FALSE")
-            last = first = None
+            last = None
         ga = sg.staged_path("patentsview", "g_assignee_disambiguated")
         if have_names and ga.exists():
             _view(c, "ag", canon("assignee_gvkey"))
@@ -535,8 +608,8 @@ def adapt_patent_firms():
             use = "n.patent_id NOT IN (SELECT patent_id FROM dl)"
         elif fill == "none":
             use = "FALSE"
-        else:
-            use = f"p.year > {last}"
+        else:                                    # after DISCERN's last grant year, for the patents it leaves unlinked
+            use = f"p.year > {last} AND n.patent_id NOT IN (SELECT patent_id FROM dl)"
         c.execute(f"""CREATE OR REPLACE TABLE pf AS
             WITH x AS (SELECT patent_id, gvkey, 'discern' AS link FROM dl
                        UNION ALL
@@ -547,22 +620,13 @@ def adapt_patent_firms():
         k = c.execute("""SELECT count(DISTINCT patent_id), count(DISTINCT patent_id) FILTER (WHERE link = 'discern'),
                                 count(DISTINCT patent_id) FILTER (WHERE link = 'name'), count(DISTINCT gvkey) FROM pf""").fetchone()
         log(f"patent_firm: {k[0]:,} patents linked to {k[3]:,} firms ({k[1]:,} through DISCERN, {k[2]:,} by assignee name"
-            + (f", the name match filling in {fill.replace('_', ' ')}" + (f" (grants after {last})" if fill == 'after_discern' and have_d else "")
+            + (f", the name match filling in {fill.replace('_', ' ')}"
+               + (f" (grants after {last} that DISCERN leaves unlinked)" if fill == 'after_discern' and have_d else "")
                if have_d else "") + f"); {k[0] / max(n_co, 1):.1%} of the {n_co:,} company-assigned patents")
         diagnostic("patents -> firms (gvkey)", "patents", "DISCERN" + (" + assignee names" if have_names else ""), "patent_id",
                    k[0], n_co, "company-assigned patents")
-        if have_d and have_names and last is not None:   # does the name match agree with DISCERN where both exist?
-            a = c.execute("""SELECT count(*), count(s.patent_id)
-                             FROM (SELECT DISTINCT patent_id FROM nl WHERE patent_id IN (SELECT patent_id FROM dl)) b
-                             LEFT JOIN (SELECT DISTINCT patent_id FROM nl JOIN dl USING (patent_id, gvkey)) s USING (patent_id)""").fetchone()
-            rec = c.execute(f"""SELECT count(DISTINCT d.patent_id), count(DISTINCT n.patent_id)
-                                FROM dl d JOIN p USING (patent_id) LEFT JOIN nl n USING (patent_id)
-                                WHERE p.year BETWEEN {first} AND {last}""").fetchone()
-            if a[0]:
-                log(f"patent_firm: where DISCERN and the name match both link a patent ({a[0]:,} patents), they agree on the firm for "
-                    f"{a[1] / a[0]:.1%}; the name match finds {rec[1] / max(rec[0], 1):.1%} of DISCERN's patents")
-                diagnostic("name match agrees with DISCERN", "patent_firm (name)", "discern_patents", "patent_id", a[1], a[0],
-                           "patents linked by both", note=f"the name match finds {rec[1] / max(rec[0], 1):.1%} of DISCERN's patents")
+        if have_d and have_names and last is not None:   # the name match's error rate, on patents it has not seen
+            _holdout(c, last)
         _application_firms(c)
         return True
     finally:
@@ -641,7 +705,7 @@ def build_firm_panel():
             SELECT pf.gvkey, pf.share, pf.link, p.patent_id, p.year AS grant_year, p.app_year, p.main_subclass,
                    p.ai, p.ai_broad, p.ai_aipd, p.{label} AS ai_label, p.climate, p.weapons
             FROM pf JOIN p USING (patent_id)""")
-        y0 = pc.q1(c, "SELECT min(app_year) FROM p")
+        y0 = pc.q1(c, "SELECT min(year) FROM p")      # the first grant year: earlier filings are only partly in the data
         def s(cond):  # noqa: E306
             return f"sum(CASE WHEN {cond} THEN share ELSE 0 END)"
         c.execute(f"""CREATE OR REPLACE TABLE fy AS
@@ -719,10 +783,40 @@ def build_firm_panel():
     fill = [x for x in num if x.endswith(("_filed", "_granted", "_covered", "_pending")) or x in ("pat_discern", "pat_name")]
     d[fill] = d[fill].fillna(0)
     d["year"] = d.year.astype(int)
+    early = d.year < y0
+    if early.any():
+        log(f"firm panel: {int(early.sum()):,} firm-years filed before {y0} left out ({d.loc[early, 'pat_filed'].sum():,.0f} patents): "
+            f"PatentsView starts with the patents granted in {y0}, so earlier filing years are incomplete")
+        d = d[~early].reset_index(drop=True)
     _save_panel(d, "firm_patents_year")
     log(f"firm panel: {d.gvkey.nunique():,} firms, {len(d):,} firm-years, filing years {d.year.min()}-{d.year.max()}; "
-        f"AI label '{LAB['SETTINGS'].get('ai_label', 'aipd')}'; exploration window {W} years")
+        f"AI label '{LAB['SETTINGS'].get('ai_label', 'aipd')}'; exploration window {W} years, so exploration and search "
+        f"measures start in {y0 + W}")
     return d
+
+
+STATA_SHORT = [("Liberalism", "Lib"), ("Alignment", "Align"), ("Employees", "Emp"), ("Employee", "Emp"), ("Donations", "Don"),
+               ("Members", "Mem"), ("Execucomp", "Exec"), ("Outsider", "Out"), ("NonDonors", "NonDon"), ("ThisYr", "Yr"),
+               ("Industry", "Ind"), ("Stdev", "Sd"), ("Board", "Brd"), ("_filed", "_f")]
+
+
+def stata_names(cols):
+    """{column: Stata name}: at most 32 characters, letters, digits and underscores, unique; long names are shortened
+    by the words in STATA_SHORT (dipi_numEmployeeDonationsThisYr_10yr -> dipi_numEmpDonationsThisYr_10yr), then cut."""
+    out, seen = {}, set()
+    for col in cols:
+        n = re.sub(r"\W", "_", str(col))
+        n = "_" + n if n[:1].isdigit() else n
+        for long_, short in STATA_SHORT:
+            if len(n) <= 32:
+                break
+            n = n.replace(long_, short)
+        n, base, k = n[:32], n[:32], 1
+        while n.lower() in seen:
+            n, k = base[:32 - len(str(k)) - 1] + f"_{k}", k + 1
+        seen.add(n.lower())
+        out[col] = n
+    return out
 
 
 def _save_panel(d, name):
@@ -731,14 +825,17 @@ def _save_panel(d, name):
     tables = Path(LAB["RESULTS"]) / "tables"
     tables.mkdir(parents=True, exist_ok=True)
     d.to_csv(tables / f"{name}.csv", index=False)
-    try:                                        # for Stata: short names, no missing-type surprises
+    try:                                        # for Stata: short names (the full name as the label), no missing-type surprises
         s = d.copy()
         for col in s.columns:
             if s[col].dtype == bool:
                 s[col] = s[col].astype("int8")
             elif s[col].dtype == object:
                 s[col] = s[col].astype(str).replace({"None": "", "nan": ""})
-        s.to_stata(tables / f"{name}.dta", write_index=False, version=118)
+        names = stata_names(s.columns)
+        s = s.rename(columns=names)
+        labels = {names[c]: str(c)[:80] for c in names if names[c] != c}
+        s.to_stata(tables / f"{name}.dta", write_index=False, version=118, variable_labels=labels or None)
     except Exception as e:
         log(f"{name}: no Stata copy ({type(e).__name__}: {e}); the CSV has everything")
 
@@ -773,14 +870,17 @@ def build_panel_firm_year():
         out = out.merge(x, on=["gvkey", "year"], how="outer")
     out = out.sort_values(["gvkey", "year"])
     _save_panel(out, "panel_firm_year")
-    both = out.dropna(subset=["pat_filed"])
+    both = out[out.pat_filed.fillna(0) > 0]
     checks = [("vr_workers", "VRscores workforce")]
     if dipi is not None and pc.dipi_measure(dipi):
         checks.append((f"dipi_{pc.dipi_measure(dipi)}", "DIPI"))
     for col, label in checks:
-        if col in out:
+        if col in out and out[col].notna().any():
+            y = out.loc[out[col].notna(), "year"]
+            sub = both[both.year.between(y.min(), y.max())]      # the years the source covers
             diagnostic(f"firm patents -> {label}", "firm_patents_year", label, "gvkey x year",
-                       int(both[col].notna().sum()), len(both), "firm-years with patents")
+                       int(sub[col].notna().sum()), len(sub), "firm-years with patents",
+                       note=f"filing years {int(y.min())}-{int(y.max())}, the years {label} covers")
     return out
 
 

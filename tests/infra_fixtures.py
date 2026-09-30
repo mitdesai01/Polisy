@@ -38,12 +38,13 @@ def build(D):
         ["11000006", "utility", "2022-05-10", "Quantum error correction with qubits", "B2", 15, 0, "ipg220510.xml"],
         ["11000007", "utility", "2023-08-01", "Systems and methods for generating text with language models", "B1", 30, 0, "ipg230801.xml"],
         ["4000008", "utility", "1977-02-01", "Rifle sight", "A", 5, 0, "pftaps.txt"],
+        ["10000009", "utility", "2019-10-01", "Intrusion detection for industrial control networks", "B2", 9, 0, "ipg191001.xml"],
     ])
     pv_zip(pv / "g_application.tsv.zip", ["application_id", "patent_id", "patent_application_type", "filing_date", "series_code", "rule_47_flag"], [
         ["15/000001", "10000001", "15", "2017-03-01", "15", "FALSE"], ["16/000002", "10000002", "16", "2018-05-05", "16", "FALSE"],
         ["29/000003", "D900000", "29", "2019-01-01", "29", "FALSE"], ["16/000005", "10000005", "16", "2019-07-07", "16", "FALSE"],
         ["17/000006", "11000006", "17", "2020-10-10", "17", "FALSE"], ["17/000007", "11000007", "17", "2021-12-12", "17", "FALSE"],
-        ["05/000008", "4000008", "05", "1975-04-04", "05", "FALSE"],
+        ["05/000008", "4000008", "05", "1975-04-04", "05", "FALSE"], ["15/000009", "10000009", "15", "2016-02-02", "15", "FALSE"],
     ])
     pv_zip(pv / "g_cpc_current.tsv.zip", ["patent_id", "cpc_sequence", "cpc_section", "cpc_class", "cpc_subclass", "cpc_group", "cpc_type"], [
         ["10000001", 0, "G", "G06", "G06N", "G06N3/08", "inventional"], ["10000001", 1, "G", "G16", "G16H", "G16H50/20", "additional"],
@@ -51,7 +52,7 @@ def build(D):
         ["10000005", 0, "F", "F41", "F41A", "F41A3/00", "inventional"],
         ["11000006", 0, "G", "G06", "G06N", "G06N10/40", "inventional"],
         ["11000007", 0, "G", "G06", "G06F", "G06F40/56", "inventional"], ["11000007", 1, "G", "G06", "G06N", "G06N3/0455", "inventional"],
-        ["4000008", 0, "F", "F41", "F41G", "F41G1/00", "inventional"],
+        ["4000008", 0, "F", "F41", "F41G", "F41G1/00", "inventional"], ["10000009", 0, "H", "H04", "H04L", "H04L63/14", "inventional"],
     ])
     pv_zip(pv / "g_location_disambiguated.tsv.zip", ["location_id", "disambig_city", "disambig_state", "disambig_country", "latitude", "longitude", "county", "state_fips", "county_fips"], [
         ["loc-ca", "Mountain View", "CA", "US", 37.39, -122.08, "Santa Clara", "6", "85"],
@@ -72,6 +73,7 @@ def build(D):
         ["11000006", 0, "as-ibm", None, None, "International Business Machines Corporation", "2.0", "loc-ny"],
         ["11000007", 0, "as-oai", None, None, "OpenAI OpCo, LLC", "2.0", "loc-ca"],
         ["4000008", 0, "as-colt", None, None, "Colt's Manufacturing Company", "2", "loc-tx"],
+        ["10000009", 0, "as-cs", None, None, "Cyber Systems Inc", "2.0", "loc-ca"],
     ])
     pv_zip(pv / "g_patent_abstract.tsv.zip", ["patent_id", "patent_abstract"], [
         ["10000001", "A neural network analyzes medical images and diagnoses diseases. The system predicts patient outcomes, "
@@ -135,11 +137,20 @@ def build_firms(D):
     d = D / "discern"
     d.mkdir(parents=True, exist_ok=True)
     ibm = "INTERNATIONAL BUSINESS MACHINES CORPORATION"
-    pd.DataFrame({"patent_id": ["10000001", "10000002", "5500000"], "patent_date": ["2019-06-18", "2020-01-07", "1996-03-05"],
-                  "assignee_name": ["GOOGLE LLC", ibm, ibm], "fyear": [2019, 2020, 1996],
-                  "name_std": ["GOOGLE", "INTERNATIONAL BUSINESS MACHINES", "INTERNATIONAL BUSINESS MACHINES"],
-                  "id_name": [11, 12, 12], "sample": ["compustat", "compustat", "compustat"],
-                  "permno_adj": [90319.0, 12490.0, 12490.0]}).to_csv(d / "discern_pat_grant_1980_2021.csv", index=False)
+    cols = ["patent_id", "patent_date", "assignee_name", "fyear", "name_std", "id_name", "sample", "permno_adj"]
+    # owner at grant; 10000009 was bought by Alphabet (90319) between its filing in 2016 and its grant in 2019
+    pd.DataFrame([["10000001", "2019-06-18", "GOOGLE LLC", 2019, "GOOGLE", 11, "U", 90319.0],
+                  ["10000002", "2020-01-07", ibm, 2020, "INTERNATIONAL BUSINESS MACHINES", 12, "U", 12490.0],
+                  ["5500000", "1996-03-05", ibm, 1996, "INTERNATIONAL BUSINESS MACHINES", 12, "U", 12490.0],
+                  ["4000008", "1977-02-01", "COLT INDUSTRIES INC", 1977, "COLT INDUSTRIES", 13, "U", 11111.0],
+                  ["10000009", "2019-10-01", "CYBER SYSTEMS INC", 2019, "CYBER SYSTEMS", 14, "S", 90319.0]],
+                 columns=cols).to_csv(d / "discern_pat_grant_1980_2021.csv", index=False)
+    # owner at filing, for patents applied for in 1980-2021 (10000005 was granted in 2021, after the grant file's last year)
+    pd.DataFrame([["10000001", "2017-03-01", "GOOGLE LLC", 2017, "GOOGLE", 11, "U", 90319.0],
+                  ["10000009", "2016-02-02", "CYBER SYSTEMS INC", 2016, "CYBER SYSTEMS", 14, "U", 55555.0],
+                  ["10000005", "2019-07-07", "HECKLER & KOCH GMBH", 2019, "HECKLER & KOCH", 22, "S", 88888.0],
+                  ["", "2021-05-05", "GOOGLE LLC", 2021, "GOOGLE", 11, "U", 90319.0]],
+                 columns=cols).to_csv(d / "discern_pat_app_1980_2021.csv", index=False)
     pd.DataFrame({"openalex_id": ["W100", "W200"], "earliest_pub_date": ["2019-01-01", "2020-01-01"],
                   "openalex_date": ["2019-01-01", "2020-01-01"], "crossref_date": ["2019-01-02", "2020-01-02"],
                   "fyear": [2019, 2020], "name_std": ["GOOGLE", "INTERNATIONAL BUSINESS MACHINES"], "id_name": [11, 12],
@@ -154,10 +165,11 @@ def build_firms(D):
     pd.DataFrame({"id_name": [31, 32], "sample": ["compustat", "compustat"], "name_std": ["ALPHABET INC", "IBM"],
                   "fyear1": [2015, 1980], "nyear1": [2021, 2021], "permno_adj1": [90319, 12490], "name_acq1": [None, None]}
                  ).to_csv(d / "discern_uo_names.csv", index=False)
-    pd.DataFrame({"permno_adj": [90319, 12490], "fyear": [2019, 2020], "n_patents": [3000, 9000], "n_pubs": [100, 200],
-                  "name_std": ["ALPHABET INC", "IBM"]}).to_csv(d / "discern_panel_1980_2021.csv", index=False)
-    pd.DataFrame({"permno_adj": [90319, 12490, 12490, 77777, 88888], "gvkey": ["160329", "006066", "006066", "100001", "100002"],
-                  "fyear": [2019, 2020, 1996, 2000, 2019]}).to_stata(d / "permno_gvkey.dta", write_index=False)
+    pd.DataFrame({"permno_adj": [90319, 12490], "gvkey": [160329, 6066], "fyear": [2019, 2020], "n_patents": [3000, 9000],
+                  "n_pubs": [100, 200]}).to_csv(d / "discern_firm_panel_1980_2021.csv", index=False)
+    pd.DataFrame({"permno_adj": [90319, 12490, 12490, 77777, 88888, 55555, 11111],
+                  "gvkey": ["160329", "006066", "006066", "100001", "100002", "100003", "002993"],
+                  "fyear": [2019, 2020, 1996, 2000, 2019, 2016, 1977]}).to_stata(d / "permno_gvkey.dta", write_index=False)
     pd.DataFrame({"gvkey": ["160329", "006066", "006066"], "linkprim": ["P", "P", "J"], "liid": ["01", "01", "02"],
                   "linktype": ["LC", "LC", "LU"], "lpermno": [90319, 12490, 99999], "lpermco": [45483, 20990, 99999],
                   "linkdt": ["20040819", "19620131", "19900101"], "linkenddt": ["E", "E", "19951231"]}

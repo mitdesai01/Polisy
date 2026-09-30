@@ -29,7 +29,7 @@ for _cand in (_HERE.parent.parent / "POLISY_DA", _HERE.parent, Path("/content/po
         sys.path.insert(0, str(_cand))
 import polisy_core as pc  # noqa: E402
 
-__version__ = "0.3.3 (2026-09-30) patent, firm, IPUMS and task layers; DISCERN 2.0 as published"
+__version__ = "0.3.4 (2026-09-30) patent, firm, IPUMS and task layers; DISCERN 2.0 as published"
 
 # --------------------------------------------------------------------------- config
 LAB_ROOT = Path(os.environ.get("POLISY_LAB_ROOT", pc.ROOT / "lab"))
@@ -48,8 +48,11 @@ LAB = {
         "aipd_threshold": 50,            # AIPD's any-AI prediction: 50 (its default); 86 or 93 for fewer false positives
         "explore_window": 5,             # years of a firm's earlier patents that define "new to the firm" and search
                                          # depth and scope (Katila & Ahuja 2002 use five)
-        "name_fill": "after_discern",    # patents the assignee-name match links to firms: "after_discern" (years after
-                                         # DISCERN's last year), "unlinked" (any patent DISCERN leaves unlinked) or "none"
+        "name_fill": "after_discern",    # patents the assignee-name match links to firms: "after_discern" (grants after the
+                                         # last year of DISCERN's grant file that DISCERN leaves unlinked), "unlinked" (any
+                                         # patent DISCERN leaves unlinked) or "none"
+        "discern_owner": "filing",       # a patent's owner when DISCERN's grant- and application-dated files differ: at
+                                         # "filing" (the firm whose R&D filed it; the panel counts by filing year) or "grant"
         "name_min_score": 95,            # fuzzy name matches below this score (0-100) are not used
         "webb_run": False,               # match AI patent text to O*NET tasks (adapters/tasks.py; the first run parses
                                          # every AI patent's text, an hour or more; the parse is cached and resumable)
