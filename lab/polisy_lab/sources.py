@@ -14,6 +14,7 @@ import shutil
 import os
 import subprocess
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -506,7 +507,7 @@ PV_FILES = {
 }
 # What each step needs. "core" is enough for patents, filing years, places and the firm link by name.
 PV_SETS = {
-    "core": [("patentsview", r) for r in ("patent", "application", "cpc", "inventor", "location", "assignee", "cpc_title")],
+    "core": [("patentsview", r) for r in ("patent", "application", "cpc", "inventor", "location", "assignee")],
     "pregrant": [("patentsview_pregrant", r) for r in ("application", "cpc", "inventor", "location", "assignee", "crosswalk")],
     "text": [("patentsview", "abstract"), ("patentsview_pregrant", "abstract")],
     "citations": [("patentsview", "citation")],
@@ -518,24 +519,43 @@ def fetch_patentsview(dest=None, tables=("core", "pregrant")):
 
     `tables`: set names from PV_SETS ("core", "pregrant", "text", "citations") or table names such as
     "g_application". A table already found in any search folder, under its PatentsView name, is skipped, so
-    your own copies are never downloaded again."""
+    your own copies are never downloaded again. When PatentsView's server refuses scripted downloads (it answered
+    403, Access Denied, from September 2026), the tables still missing are listed once, with the pages to get them
+    from by hand; a new server address can be set with `sources.PV_BASE = "https://.../"`."""
     dest = Path(dest) if dest else dirs()["RAW"] / "patentsview"
     want = []
     for t in tables:
         want += PV_SETS.get(t, [k for k, v in PV_FILES.items() if v[1] == t])
+    missing, refused = [], False
     for key in dict.fromkeys(want):
         folder, table = PV_FILES[key]
         have = discover(*key)
         if have:
             log(f"patentsview: {table} already present ({Path(have[0][0]).name})")
             continue
+        if refused:
+            missing.append(table)
+            continue
         url = f"{PV_BASE}{folder}/{table}.tsv.zip"
         try:
             t0 = time.time()
             p = download(url, dest / f"{table}.tsv.zip", timeout=3600)
             log(f"patentsview: {table} downloaded ({p.stat().st_size / 1e9:.2f} GB, {time.time() - t0:.0f}s)")
+        except urllib.error.HTTPError as e:
+            missing.append(table)
+            refused = e.code in (401, 403, 404)
+            log(f"patentsview: {url} answered {e.code} ({e.reason})" + ("; PatentsView's server refuses scripted "
+                "downloads, so the rest are not tried" if refused else ""))
         except Exception as e:
-            log(f"patentsview: {table} failed ({type(e).__name__}: {e}); download {url} by hand into {dest}")
+            missing.append(table)
+            log(f"patentsview: {table} failed ({type(e).__name__}: {e})")
+    if missing:
+        g = [t for t in missing if t.startswith("g_")]
+        pg = [t for t in missing if t.startswith("pg_")]
+        log(f"patentsview: download these by hand and put them, still zipped, in {dest}:"
+            + ("\n  from https://patentsview.org/download/data-download-tables: " + ", ".join(f"{t}.tsv.zip" for t in g) if g else "")
+            + ("\n  from https://patentsview.org/download/pg-download-tables: " + ", ".join(f"{t}.tsv.zip" for t in pg) if pg else ""))
+    return missing
 
 
 def fetch_aipd(raw):

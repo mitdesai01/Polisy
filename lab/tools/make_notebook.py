@@ -127,6 +127,8 @@ run_all(stages=("fetch",), fetch=True, patentsview=False)"""),
 #       "text"      g_patent_abstract and pg_published_application_abstract (for step 6c)
 #       "citations" g_us_patent_citation, the largest table (search depth and scope; forward citations)
 #     Tables already in your folders, under their PatentsView names, are skipped: upload the four you have first.
+#     If PatentsView's server refuses (403, Access Denied), the cell lists the tables still missing: download them
+#     by hand from patentsview.org (the Data Download Tables pages) and put them, still zipped, in POLISY/data/patentsview.
 #     The USPTO AI Patent Dataset (AIPD) is fetched from the USPTO page when its link can be found; otherwise save
 #     ai_model_predictions (the .csv or .zip) in POLISY/data/aipd by hand. O*NET's task files come with POLISY_DA.
 #     The downloads take Drive space (several GB with citations), and so do the staged Parquet copies in POLISY/lab/staged.
