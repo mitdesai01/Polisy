@@ -4,6 +4,8 @@
     from polisy_lab import run_all
     run_all()                                  # fetch -> inventory -> profile -> adapt -> link -> analyze -> site
     run_all(stages=("adapt", "link", "analyze", "site"), fetch=False)
+    run_all(stages=("fetch",), patentsview=True, pv_tables=("core", "pregrant", "text"))   # the PatentsView downloads
+    run_all(stages=("adapt",), fetch=False, adapters=PATENT_LAYER)                         # the patent layer only
 """
 from __future__ import annotations
 
@@ -32,13 +34,13 @@ def _safe(label, f, *a, **k):
         return None
 
 
-def run_all(stages=STAGES, fetch=True, patentsview=False, adapters=None, analyses=None):
+def run_all(stages=STAGES, fetch=True, patentsview=False, adapters=None, analyses=None, pv_tables=("core", "pregrant")):
     dirs()
     RESULTS["run"].pop("failed", None)
     RESULTS["run"].update({"started": time.strftime("%Y-%m-%d %H:%M"), "version": __version__, "polisy_core": pc.__version__,
                            "stages": [s for s in stages if s != "fetch" or fetch], "analyses_only": list(analyses or [])})
     if "fetch" in stages and fetch:
-        _safe("fetch open datasets", sources.fetch_all, patentsview=patentsview)
+        _safe("fetch open datasets", sources.fetch_all, patentsview=patentsview, pv_tables=pv_tables)
     if "inventory" in stages:
         inv = _safe("inventory", sources.inventory)
         if inv is not None:

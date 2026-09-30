@@ -23,6 +23,9 @@ runs the analyses, stress-tests the headline findings, and writes the research r
    `daioe-v1.0.0-scores.zip`, the IRS county migration zip, the CSPP file. For the full VRscores data (step 3) add the
    four VRscores panel zips (each downloads as `dataverse_files.zip`, so give them different names), `Compustat_Final.csv`,
    the DIPI file, the Census `list1_2023.xlsx` and `list2_2023.xlsx`, and your ACS metro CSV if you have one.
+   For the patent layer (steps 4b and 6b): your DISCERN 2.0 files go in `POLISY/data/discern`, and any PatentsView
+   tables you already have (for example `g_patent.tsv`) in `POLISY/data/patentsview`; step 4b downloads the rest there.
+   An IPUMS extract (step 4c) lands in `POLISY/data/ipums`.
 3. The code is cloned from GitHub each time, so it is always the latest (a code zip in `POLISY`, such as GitHub's
    `polisy-main.zip`, is used only when cloning fails).
 
@@ -71,7 +74,8 @@ sys.path[:0] = [str(core_file.parent), str(core_file.parent.parent / "lab")]
 
 import polisy_core as pc
 import polisy_lab
-from polisy_lab import run_all, LAB
+from polisy_lab import run_all, LAB, PATENT_LAYER
+from polisy_lab.adapters import ADAPTERS
 
 pc.CONFIG["SEARCH_DIRS"] = [str(DATA), "/content"] + [d for d in pc.CONFIG["SEARCH_DIRS"] if str(d) not in (str(DATA), "/content")]
 # If the inventory (step 5) picks the wrong file for an input, point it at the right one, e.g.
@@ -114,6 +118,37 @@ if RUN_POLISY_DA:
 #    and the stress tests' controls from GitHub: county context, Dingel & Neiman telework shares, county presidential returns).
 # Files you already have, under any name and inside zips, are skipped. PatentsView is not downloaded (patentsview=False).
 run_all(stages=("fetch",), fetch=True, patentsview=False)"""),
+    ("code", """# 4b. The patent layer's inputs, downloaded into POLISY/data (Drive), so later sessions reuse them.
+#     PatentsView (patentsview.org), as zipped tables. PV_TABLES picks the sets:
+#       "core"      g_patent, g_application (filing dates), g_cpc_current, g_inventor_disambiguated,
+#                   g_location_disambiguated, g_assignee_disambiguated (owners) and g_cpc_title
+#       "pregrant"  published applications: pg_published_application, pg_cpc_current, pg_inventor_disambiguated,
+#                   pg_location_disambiguated, pg_assignee_disambiguated, pg_granted_pgpubs_crosswalk
+#       "text"      g_patent_abstract and pg_published_application_abstract (for step 6c)
+#       "citations" g_us_patent_citation, the largest table (search depth and scope; forward citations)
+#     Tables already in your folders, under their PatentsView names, are skipped: upload the four you have first.
+#     The USPTO AI Patent Dataset (AIPD) is fetched from the USPTO page when its link can be found; otherwise save
+#     ai_model_predictions (the .csv or .zip) in POLISY/data/aipd by hand. O*NET's task files come with POLISY_DA.
+#     The downloads take Drive space (several GB with citations), and so do the staged Parquet copies in POLISY/lab/staged.
+GET_PATENT_DATA = False
+PV_TABLES = ("core", "pregrant", "text")                  # add "citations" for search depth and scope
+if GET_PATENT_DATA:
+    from polisy_lab import sources
+    sources.fetch_patentsview(DATA / "patentsview", PV_TABLES)
+    sources.fetch_aipd(DATA)
+    sources.fetch_onet(DATA)"""),
+    ("code", """# 4c. IPUMS USA: one ACS extract (the 2019-2023 5-year file) with the variables the occupation and industry
+#     controls need (polisy_lab/adapters/ipums.py lists them). Get a free API key at https://account.ipums.org/api_keys,
+#     then add it in Colab's Secrets (the key icon on the left) as IPUMS_API_KEY with notebook access switched on.
+#     IPUMS prepares the extract in minutes to an hour; this cell waits, then saves it in POLISY/data/ipums, where it
+#     is found from then on. Run it once.
+GET_IPUMS = False
+if GET_IPUMS:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "ipumspy"])
+    from google.colab import userdata
+    os.environ["IPUMS_API_KEY"] = userdata.get("IPUMS_API_KEY")
+    from polisy_lab.adapters.ipums import request_extract
+    request_extract(dest=DATA / "ipums")"""),
     ("code", """# 5. What was found for every source and role, and what each file contains
 import json
 import pandas as pd
@@ -123,13 +158,34 @@ res = json.loads((LAB["RESULTS"] / "results.json").read_text())
 pd.set_option("display.max_colwidth", 120)
 pd.DataFrame([{"source": s, **r} for s, m in res["catalog"].items() for r in m["roles"]])[["source", "role", "files", "paths"]]"""),
     ("code", """# 6. Canonical tables, then the linked panels. Each line below is one join and how much of it matched.
-run_all(stages=("adapt", "link"), fetch=False)
+#    The patent layer and the task matching have their own steps (6b, 6c); their tables, once built, are used here too.
+run_all(stages=("adapt", "link"), fetch=False, adapters=[a for a in ADAPTERS if a not in PATENT_LAYER + ["patent_tasks"]])
 vr = LAB["CANONICAL"] / "vr_occupation_year.parquet"
 if vr.exists():
     vr = pd.read_parquet(vr, columns=["source", "year"])
     print(f"VRscores read from the {vr.source.iloc[0]}, {vr.year.min()}-{vr.year.max()}",
           "(the full panels)" if vr.source.iloc[0] == "panels" else "(the report: set RUN_POLISY_DA = True in step 3 for the panels)")
-pd.DataFrame(json.loads((LAB["RESULTS"] / "results.json").read_text())["diagnostics"])[["step", "key", "matched", "total", "share", "unit", "note"]]"""),
+pd.DataFrame(json.loads((LAB["RESULTS"] / "results.json").read_text())["diagnostics"],
+             columns=["step", "key", "matched", "total", "share", "unit", "note"])"""),
+    ("code", """# 6b. The patent layer: patents and published applications by filing year, AI labels (AIPD and CPC), climate and
+#     weapons classes, places, owners (DISCERN, then assignee names matched to Compustat), and the firm-year panel with
+#     exploration, search depth and scope. The first run stages the big tables as Parquet (tens of minutes); later
+#     runs reuse them. Check the lines "patentsview: ... utility patents", "patent_firm: ... linked" and the agreement
+#     between DISCERN and the name match. The firm panels are in POLISY/lab/panels and, as CSV and Stata files, in
+#     POLISY/lab/results/tables (firm_patents_year, panel_firm_year).
+RUN_PATENT_LAYER = False
+if RUN_PATENT_LAYER:
+    run_all(stages=("adapt", "link"), fetch=False, adapters=PATENT_LAYER)
+    d = json.loads((LAB["RESULTS"] / "results.json").read_text())["diagnostics"]
+    display(pd.DataFrame(d, columns=["step", "matched", "total", "share", "unit", "note"]).tail(12))"""),
+    ("code", """# 6c. Which jobs AI invention targets (Webb 2020): AI patents' titles and abstracts matched to O*NET tasks through
+#     their verb-object pairs. The first run parses every AI invention's text, an hour or more; the parse is saved as it
+#     goes (POLISY/lab/staged/tasks), so an interrupted run picks up where it stopped. Needs step 6b and the "text" tables.
+RUN_TASK_MATCHING = False
+if RUN_TASK_MATCHING:
+    subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_md"])
+    LAB["SETTINGS"].update(webb_run=True, webb_processes=2)
+    run_all(stages=("adapt", "link"), fetch=False, adapters=["patent_tasks"])"""),
     ("code", """# 7. Analyses: findings, graded, in the lab's reading order
 run_all(stages=("analyze",), fetch=False)
 findings = pd.read_csv(LAB["RESULTS"] / "findings.csv").sort_values("rank")
@@ -183,6 +239,13 @@ def wcorr(df, x, y="rep_share", w="workers"):
     return cov / ((d[w] * (d[x] - mx) ** 2).sum() * (d[w] * (d[y] - my) ** 2).sum()) ** 0.5
 
 pl.DataFrame({"measure": measures, "r_with_rep_share": [round(wcorr(occ, m), 3) for m in measures]})"""),
+    ("code", """# The firm-year panel (step 6b): patents by filing year among firms linked to patents, and how many are linked
+# through DISCERN or by name. The last two or three filing years are incomplete (patents not yet granted); the
+# published applications (apps_*) show them sooner.
+duckdb.sql(f\"\"\"
+    SELECT year, count(*) AS firms, round(sum(pat_filed)) AS patents, round(sum(ai_filed)) AS ai_patents,
+           round(sum(pat_discern)) AS via_discern, round(sum(pat_name)) AS via_names, round(sum(apps_filed)) AS applications
+    FROM '{panels}/firm_patents_year.parquet' WHERE year >= 2010 GROUP BY 1 ORDER BY 1\"\"\").df()"""),
 ]
 
 

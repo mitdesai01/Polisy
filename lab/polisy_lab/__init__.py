@@ -8,5 +8,6 @@ a static site that renders them (site.py). Start with run_all().
 """
 from .core import LAB, LAB_ROOT, RESULTS, __version__
 from .run import run_all, STAGES
+from .adapters import PATENT_LAYER
 
-__all__ = ["run_all", "STAGES", "LAB", "LAB_ROOT", "RESULTS", "__version__"]
+__all__ = ["run_all", "STAGES", "PATENT_LAYER", "LAB", "LAB_ROOT", "RESULTS", "__version__"]

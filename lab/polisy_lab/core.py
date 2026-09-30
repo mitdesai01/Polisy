@@ -29,19 +29,36 @@ for _cand in (_HERE.parent.parent / "POLISY_DA", _HERE.parent, Path("/content/po
         sys.path.insert(0, str(_cand))
 import polisy_core as pc  # noqa: E402
 
-__version__ = "0.2.0 (2026-09-28)"
+__version__ = "0.3.0 (2026-09-30) patent, firm, IPUMS and task layers"
 
 # --------------------------------------------------------------------------- config
 LAB_ROOT = Path(os.environ.get("POLISY_LAB_ROOT", pc.ROOT / "lab"))
 LAB = {
     "RAW": LAB_ROOT / "raw",              # downloads made by the lab (inputs you supply are searched for)
+    "STAGED": LAB_ROOT / "staged",        # big source tables as Parquet, read once (staging.py)
     "CANONICAL": LAB_ROOT / "canonical",  # one parquet per source table, one grain each (GRAINS)
-    "PANELS": LAB_ROOT / "panels",        # linked panels: occupation, industry, state_year, county_year, metro_year
+    "PANELS": LAB_ROOT / "panels",        # linked panels: occupation, industry, state_year, county_year, metro_year, firm_year
     "RESULTS": LAB_ROOT / "results",      # findings.json, views/*.json, tables/*.csv, profiles, diagnostics
     "SITE": LAB_ROOT / "site",            # the built POLISY site (GitHub Pages ready)
     "TMP": LAB_ROOT / "_tmp",
     "SETTINGS": {
-        "ai_cpc": "broad",               # AI patent definition: "narrow" (G06N) or "broad" (see patents adapter)
+        "ai_cpc": "broad",               # AI patent definition by CPC: "narrow" (G06N) or "broad" (see adapters/patents.py)
+        "ai_label": "aipd",              # the AI label of the firm panel's `ai` columns: "aipd" (USPTO's model, where it
+                                         # covers the patent), "cpc_broad" or "cpc_narrow"
+        "aipd_threshold": 50,            # AIPD's any-AI prediction: 50 (its default); 86 or 93 for fewer false positives
+        "explore_window": 5,             # years of a firm's earlier patents that define "new to the firm" and search
+                                         # depth and scope (Katila & Ahuja 2002 use five)
+        "name_fill": "after_discern",    # patents the assignee-name match links to firms: "after_discern" (years after
+                                         # DISCERN's last year), "unlinked" (any patent DISCERN leaves unlinked) or "none"
+        "name_min_score": 95,            # fuzzy name matches below this score (0-100) are not used
+        "webb_run": False,               # match AI patent text to O*NET tasks (adapters/tasks.py; the first run parses
+                                         # every AI patent's text, an hour or more; the parse is cached and resumable)
+        "webb_text": "title+abstract",   # text matched to O*NET tasks: "title" (fast) or "title+abstract"
+        "webb_abstract_words": 60,       # words of the abstract used (its first sentences say what the invention does)
+        "webb_model": "en_core_web_md",  # spaCy English model (en_core_web_sm is the fallback)
+        "webb_processes": 1,             # parallel parsing processes (2 on Colab's two CPUs)
+        "webb_generic_share": 0.05,      # incidence ignores pairs found in more than this share of occupations
+        "webb_periods": [(1976, 2011), (2012, 2016), (2017, 2021), (2022, 2030)],   # filing-year periods
         "min_workers": 500,              # smallest VRscores unit used in occupation/industry analyses
         "bootstrap": 1000,               # bootstrap draws for confidence intervals
         "seed": 20260925,
@@ -86,6 +103,35 @@ GRAINS = {
     "patents_state_year": ("state_fips", "year"),
     "ai_cpc_edges": ("a", "b", "period"),
     "inventor_moves": ("origin", "dest", "year", "ai"),
+    # the patent layer (adapters/patents.py)
+    "aipd": ("doc_id", "is_patent"),
+    "applications": ("pgpub_id",),
+    "application_places": ("pgpub_id", "inventor_id"),
+    "inventions_year": ("year",),
+    "inventions_state_year": ("state_fips", "year"),
+    "inventions_county_year": ("county_fips", "year"),
+    # firms (adapters/firms.py)
+    "discern_patents": ("patent_id", "gvkey"),
+    "discern_firm_year": ("gvkey", "year"),
+    "assignee_gvkey": ("assignee_id", "gvkey"),
+    "patent_firm": ("patent_id", "gvkey"),
+    "application_firm": ("pgpub_id", "gvkey"),
+    "patent_citations": ("patent_id",),
+    "firm_patents_year": ("gvkey", "year"),
+    "panel_firm_year": ("gvkey", "year"),
+    # IPUMS ACS (adapters/ipums.py)
+    "acs_occupation": ("occsoc",),
+    "acs_industry": ("indnaics",),
+    "acs_occ_state": ("occsoc", "state_fips"),
+    "acs_occ_metro": ("occsoc", "cbsa"),
+    "acs_ind_occ": ("indnaics", "occsoc"),
+    # AI invention and O*NET tasks (adapters/tasks.py)
+    "onet_tasks": ("task_id",),
+    "onet_task_pairs": ("task_id", "verb", "obj"),
+    "webb_pairs": ("period", "verb", "obj"),
+    "occ_ai_invention": ("soc", "period"),
+    "patent_occ_incidence": ("doc_id", "soc"),
+    "occ_ai_incidence_year": ("soc", "year"),
 }
 
 
@@ -94,11 +140,11 @@ def log(msg):
 
 
 def dirs():
-    for k in ("RAW", "CANONICAL", "PANELS", "RESULTS", "SITE", "TMP"):
+    for k in ("RAW", "STAGED", "CANONICAL", "PANELS", "RESULTS", "SITE", "TMP"):
         Path(LAB[k]).mkdir(parents=True, exist_ok=True)
     for sub in ("tables", "views", "profiles"):
         (Path(LAB["RESULTS"]) / sub).mkdir(exist_ok=True)
-    return {k: Path(LAB[k]) for k in ("RAW", "CANONICAL", "PANELS", "RESULTS", "SITE", "TMP")}
+    return {k: Path(LAB[k]) for k in ("RAW", "STAGED", "CANONICAL", "PANELS", "RESULTS", "SITE", "TMP")}
 
 
 def canon(name):

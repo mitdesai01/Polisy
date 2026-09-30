@@ -8,6 +8,10 @@ panel_state_year   state x year: workforce partisanship, votes, AIGE, jobs, BTOS
                    (curated variables by year, cspp_*, and the 2012-16 state profile, env_*)
 panel_county_year  county x year: IRS migration, AIGE, votes, patents, jobs, CBSA
 panel_metro_year   VRscores metro x year: CBSA, AI exposure from the metro's industry mix, patents, votes
+panel_firm_year    gvkey x year: patents by filing year (AI, climate, weapons, exploration, search), published
+                   applications, the VRscores workforce and DIPI (adapters/firms.py)
+Occupations also get IPUMS ACS profiles (acs_*) and AI invention aimed at their tasks (webb_*, ai_incidence_*);
+industries get ACS profiles; states, counties and metros get patents and applications by filing year (inv_*).
 """
 from __future__ import annotations
 
@@ -130,11 +134,53 @@ def panel_occupation():
     p["soc2"] = p.soc_link.astype(str).str[:2].where(p.soc_link.notna())
     if "salary_median" in p:
         p["log_salary"] = np.log(p.salary_median)
+    p = _occupation_extras(p)
     ok = p.aioe.notna()
     diagnostic("VRscores occupations -> AIOE", "vr_occupation_year", "occ_exposure", "SOC code or occupation title",
                p.loc[ok, "workers"].sum(), p.workers.sum(), "matched workers",
                note="; ".join(f"{'not linked' if pd.isna(k) else k}: {v:.1%}" for k, v in (p.groupby("link_method", dropna=False).workers.sum() / p.workers.sum()).items()))
     write(p, "panel_occupation", where="PANELS")
+    return p
+
+
+def _soc_key(p):
+    """The SOC 2018 code of each VRscores occupation: its own code (the panels), else the SOC 2018 link, else the SOC
+    2010 link (the two classifications share most codes)."""
+    key = pd.Series(None, index=p.index, dtype=object)
+    for col in ("soc", "soc2018", "soc_link"):
+        if col in p:
+            key = key.fillna(p[col].where(p[col].astype(str).str.fullmatch(r"\d{2}-\d{4}")))
+    return key
+
+
+def _occupation_extras(p):
+    """IPUMS ACS profiles (acs_*) and AI invention aimed at the occupation's tasks (webb_*, ai_incidence_*)."""
+    from .adapters.ipums import occupation_profiles
+    p["soc_key"] = _soc_key(p)
+    prof = occupation_profiles(p.soc_key)
+    if prof is not None:
+        p = p.merge(prof.rename(columns={"soc": "soc_key"}), on="soc_key", how="left")
+        diagnostic("VRscores occupations -> IPUMS ACS profiles", "panel_occupation", "acs_occupation", "SOC 2018 code -> OCCSOC",
+                   p.loc[p.acs_workers.notna(), "workers"].sum(), p.workers.sum(), "matched workers")
+    inv = read("occ_ai_invention")
+    if inv is not None and len(inv):
+        periods = sorted(x for x in inv.period.unique() if x != "all")
+        pick = {"all": "webb_ai_invention"}
+        if periods:
+            pick[periods[-1]] = "webb_ai_invention_recent"
+        for per, name in pick.items():
+            w = inv[inv.period == per].set_index("soc")
+            p[name] = p.soc_key.map(w.exposure)
+            p[name + "_pct"] = p.soc_key.map(w.percentile)
+        diagnostic("VRscores occupations -> AI invention (Webb)", "panel_occupation", "occ_ai_invention", "SOC 2018 code",
+                   p.loc[p.webb_ai_invention.notna(), "workers"].sum(), p.workers.sum(), "matched workers")
+    iy = read("occ_ai_incidence_year")
+    if iy is not None and len(iy):
+        last = int(iy.year.max())
+        p["ai_incidence_total"] = p.soc_key.map(iy.groupby("soc").ai_incidence.sum())
+        p["ai_incidence_5y"] = p.soc_key.map(iy[iy.year > last - 5].groupby("soc").ai_incidence.sum())
+        for col in ("ai_incidence_total", "ai_incidence_5y"):
+            p[col] = p[col].fillna(0).where(p.soc_key.notna())
     return p
 
 
@@ -236,6 +282,13 @@ def panel_industry():
         pred = s.dropna(subset=["rep_occ"]).groupby("naics4").apply(lambda g: np.average(g.rep_occ, weights=g.emp), include_groups=False).rename("rep_pred")
         p = p.merge(pred, on="naics4", how="left").merge(cov, on="naics4", how="left")
         p["culture_gap"] = (p.rep_share - p.rep_pred).where(p.occ_coverage >= 0.7)
+    from .adapters.ipums import industry_profiles
+    ip = industry_profiles(p.naics4)
+    if ip is not None and len(ip):
+        p = p.merge(ip, on="naics4", how="left")
+        diagnostic("industries (NAICS-4) -> IPUMS ACS profiles", "panel_industry", "acs_industry", "NAICS-4 -> INDNAICS",
+                   p.loc[p.acs_workers.notna(), "workers"].sum(), p.workers.sum(), "matched workers",
+                   note=f"{(p.acs_coarse == True).sum()} industries only at a coarser ACS code")  # noqa: E712
     bt = read("btos_ai")
     if bt is not None and (bt.level == "sector").any():
         s = bt[(bt.level == "sector") & (bt.measure == "ai_use_now")]
@@ -320,6 +373,7 @@ def panel_state_year(years=range(2000, 2026)):
             for c in ("patents", "ai_patents", "ai_broad_patents"):
                 p[c + "_per_10k_jobs"] = p[c] / p.jobs_2019 * 1e4
         p["ai_share"] = p.ai_broad_patents / p.patents
+    p = _inventions(p, "inventions_state_year", "state_fips")
     ist = read("irs_state_year")
     if ist is not None:
         keep = ["net_migration_rate", "gross_migration_rate", "net_returns", "net_agi", "net_agi_rate", "in_agi_per_return",
@@ -368,6 +422,7 @@ def panel_county_year(years=range(2000, 2026)):
     pt = read("patents_county_year")
     if pt is not None:
         p = p.merge(pt, on=["county_fips", "year"], how="left")
+    p = _inventions(p, "inventions_county_year", "county_fips")
     ce = read("county_exposure")
     if ce is not None:
         p = p.merge(ce[["county_fips", "aige"]], on="county_fips", how="left")
@@ -434,6 +489,11 @@ def panel_metro_year():
     if pt is not None and gc is not None and "cbsa" in p:
         mp = pt.merge(gc[["county_fips", "cbsa"]], on="county_fips").groupby(["cbsa", "year"], as_index=False)[["patents", "ai_patents", "ai_broad_patents"]].sum()
         p = p.merge(mp, on=["cbsa", "year"], how="left")
+    ic = read("inventions_county_year")
+    if ic is not None and gc is not None and "cbsa" in p:
+        cols = [c for c in ic.columns if c not in ("county_fips", "year")]
+        mi = ic.merge(gc[["county_fips", "cbsa"]], on="county_fips").groupby(["cbsa", "year"], as_index=False)[cols].sum()
+        p = p.merge(mi.rename(columns={c: "inv_" + c for c in cols}), on=["cbsa", "year"], how="left")
     v = read("votes_county_year")
     if v is not None and gc is not None and "cbsa" in p:
         mv = v.merge(gc[["county_fips", "cbsa"]], on="county_fips").groupby(["cbsa", "year"], as_index=False)[["dem_votes", "rep_votes"]].sum()
@@ -445,9 +505,29 @@ def panel_metro_year():
     return p
 
 
+def _inventions(p, table, key):
+    """Granted patents and published applications by filing year (the patent layer), as inv_* columns."""
+    t = read(table)
+    if t is None:
+        return p
+    t = t.rename(columns={c: "inv_" + c for c in t.columns if c not in (key, "year")})
+    return p.merge(t, on=[key, "year"], how="left")
+
+
+def panel_firm():
+    """firm x year: the patent panel with the VRscores workforce and DIPI (adapters/firms.py), rebuilt here so that
+    POLISY_DA outputs made after the patent layer are picked up."""
+    from .core import panel_path
+    if not panel_path("firm_patents_year").exists():
+        log("panel_firm_year: needs firm_patents_year (the firms adapter: DISCERN or the assignee-name match)")
+        return None
+    from .adapters.firms import build_panel_firm_year
+    return build_panel_firm_year()
+
+
 def build_panels():
     out = {}
-    for f in (panel_occupation, panel_industry, panel_state_year, panel_county_year, panel_metro_year):
+    for f in (panel_occupation, panel_industry, panel_state_year, panel_county_year, panel_metro_year, panel_firm):
         try:
             out[f.__name__] = f()
         except Exception as e:  # a failed panel must not stop the others; the log says why

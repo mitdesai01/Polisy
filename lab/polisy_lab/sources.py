@@ -13,6 +13,7 @@ import re
 import shutil
 import os
 import subprocess
+import time
 import urllib.parse
 import urllib.request
 import zipfile
@@ -24,10 +25,12 @@ import pandas as pd
 from .core import LAB, log, pc, squash, RESULTS, dirs
 
 UA = {"User-Agent": "Mozilla/5.0 (academic research; POLISY lab)"}
+PV_KINDS = (".zip", ".tsv", ".csv", ".parquet")
 
 # Each source: title, theme, publisher, url (landing page), access, terms, grain, keys, and
 # `files`: {role: {"names": regex on the cleaned file name, "kinds": extensions,
 #                  "tokens": header cells that must all be present ("~x" = contained),
+#                  "folders": regex on the name of the folder holding the file (any file name then fits),
 #                  "many": several files (e.g. one per year)}}.
 SOURCES = {
     "aioe": {
@@ -80,13 +83,73 @@ SOURCES = {
         "files": {"state": {"names": r"^state_?(in|out)_?flow_?\d{4}", "kinds": (".csv",), "tokens": ("~y1statefips", "~y2statefips"), "many": True},
                   "county": {"names": r"^county_?(in|out)_?flow_?\d{4}", "kinds": (".csv",), "tokens": ("~y1countyfips", "~y2countyfips"), "many": True}}},
     "patentsview": {
-        "title": "PatentsView granted patents (patents, CPC, inventors, locations)", "theme": "innovation", "publisher": "USPTO PatentsView",
-        "url": "https://patentsview.org/download/data-download-tables", "access": "open, large; use your local copies (fetch can download them)",
-        "grain": "patent; patent x inventor; location", "keys": ["patent_id", "state_fips", "county_fips", "year"],
-        "files": {"patent": {"names": r"^g_patent(_tsv)?$", "kinds": (".zip", ".tsv", ".csv", ".parquet"), "tokens": ("patentid", "~patentdate")},
-                  "cpc": {"names": r"^g_cpc_current(_tsv)?$", "kinds": (".zip", ".tsv", ".csv", ".parquet"), "tokens": ("patentid", "~cpc")},
-                  "inventor": {"names": r"^g_inventor_disambiguated(_tsv)?$", "kinds": (".zip", ".tsv", ".csv", ".parquet"), "tokens": ("patentid", "~locationid")},
-                  "location": {"names": r"^g_location_disambiguated(_tsv)?$", "kinds": (".zip", ".tsv", ".csv", ".parquet"), "tokens": ("locationid", "~latitude")}}},
+        "title": "PatentsView granted patents (patents, filing dates, CPC classes, inventors, places, assignees, abstracts, citations)",
+        "theme": "innovation", "publisher": "USPTO PatentsView",
+        "url": "https://patentsview.org/download/data-download-tables",
+        "access": "open, large; the notebook's download step saves the tables you choose (or use your own copies)",
+        "grain": "patent; patent x CPC class; patent x inventor; patent x assignee; location; citation",
+        "keys": ["patent_id", "state_fips", "county_fips", "year"],
+        "files": {"patent": {"names": r"^g_patent(_tsv)?$", "kinds": PV_KINDS, "tokens": ("patentid", "~patentdate")},
+                  "application": {"names": r"^g_application(_tsv)?$", "kinds": PV_KINDS, "tokens": ("patentid",)},
+                  "cpc": {"names": r"^g_cpc_current(_tsv)?$", "kinds": PV_KINDS, "tokens": ("patentid", "~cpc")},
+                  "inventor": {"names": r"^g_inventor_disambiguated(_tsv)?$", "kinds": PV_KINDS, "tokens": ("patentid", "~locationid")},
+                  "location": {"names": r"^g_location_disambiguated(_tsv)?$", "kinds": PV_KINDS, "tokens": ("locationid", "~latitude")},
+                  "assignee": {"names": r"^g_assignee_disambiguated(_tsv)?$", "kinds": PV_KINDS, "tokens": ("patentid",)},
+                  "abstract": {"names": r"^g_patent_abstract(_tsv)?$", "kinds": PV_KINDS, "tokens": ("patentid",)},
+                  "citation": {"names": r"^g_us_patent_citation(_tsv)?$", "kinds": PV_KINDS, "tokens": ("patentid",)},
+                  "cpc_title": {"names": r"^g_cpc_title(_tsv)?$", "kinds": PV_KINDS, "tokens": ()}}},
+    "patentsview_pregrant": {
+        "title": "PatentsView pre-grant publications (published applications: filing dates, CPC classes, inventors, "
+                 "assignees, abstracts, and which were later granted)",
+        "theme": "innovation", "publisher": "USPTO PatentsView",
+        "url": "https://patentsview.org/download/pg-download-tables",
+        "access": "open, large; the notebook's download step saves the tables you choose",
+        "grain": "published application (pgpub_id); application x CPC class, inventor, assignee",
+        "keys": ["pgpub_id", "patent_id", "state_fips", "county_fips", "year"],
+        # the key column is found by pattern in the adapter (pgpub_id), so only the names are required here
+        "files": {"application": {"names": r"^pg_published_application(_tsv)?$", "kinds": PV_KINDS, "tokens": ()},
+                  "cpc": {"names": r"^pg_cpc_current(_tsv)?$", "kinds": PV_KINDS, "tokens": ()},
+                  "inventor": {"names": r"^pg_inventor_disambiguated(_tsv)?$", "kinds": PV_KINDS, "tokens": ()},
+                  "location": {"names": r"^pg_location_disambiguated(_tsv)?$", "kinds": PV_KINDS, "tokens": ()},
+                  "assignee": {"names": r"^pg_assignee_disambiguated(_tsv)?$", "kinds": PV_KINDS, "tokens": ()},
+                  "crosswalk": {"names": r"^pg_granted_pgpubs_crosswalk(_tsv)?$", "kinds": PV_KINDS, "tokens": ()},
+                  "abstract": {"names": r"^pg_published_application_abstract(_tsv)?$", "kinds": PV_KINDS, "tokens": ()}}},
+    "aipd": {
+        "title": "USPTO Artificial Intelligence Patent Dataset (AIPD): model-based AI labels for patents and published applications",
+        "theme": "innovation", "publisher": "USPTO Office of the Chief Economist (Giczy, Pairolero & Toole 2022; 2023 update)",
+        "url": "https://www.uspto.gov/ip-policy/economic-research/research-datasets/artificial-intelligence-patent-dataset",
+        "access": "open; module fetch looks for the download links on the page, otherwise save the predictions file by hand",
+        "grain": "patent or pre-grant publication (doc_id, flag_patent)", "keys": ["patent_id", "pgpub_id"],
+        "files": {"predictions": {"names": r"ai_model_predictions|^aipd|ai_patent_dataset|artificial_intelligence_patent",
+                                  "folders": r"^aipd$", "kinds": (".zip", ".csv", ".tsv", ".dta", ".parquet", ".gz"), "tokens": ()}}},
+    "discern": {
+        "title": "DISCERN 2.0: which Compustat firm owns each patent (subsidiaries and ownership changes included), 1980-2021",
+        "theme": "innovation", "publisher": "Arora, Belenzon & Sheer (Duke); DISCERN 2.0",
+        "url": "https://zenodo.org/search?q=DISCERN%20Duke%20Innovation",
+        "access": "your copy (the thesis used it); put the whole download in POLISY/data/discern. Every file in that folder is "
+                  "read and recognized by its columns",
+        "grain": "patent -> firm (gvkey or permno_adj); firm-year panel; firm names", "keys": ["patent_id", "gvkey", "year"],
+        "files": {"tables": {"names": r"discern", "folders": r"discern", "kinds": (".dta", ".csv", ".tsv", ".parquet", ".zip", ".txt"),
+                             "tokens": (), "many": True}}},
+    "ipums": {
+        "title": "IPUMS USA: American Community Survey microdata (age, gender, race, education, sector, wages, work from "
+                 "home and location of every occupation and industry)",
+        "theme": "controls", "publisher": "IPUMS USA, University of Minnesota (Ruggles et al.)",
+        "url": "https://usa.ipums.org/usa/",
+        "access": "free registration; the notebook requests the extract with your IPUMS API key (or save an extract made on "
+                  "the website, the data file and its .xml codebook, in POLISY/data/ipums)",
+        "grain": "person (weighted) -> occupation, industry, occupation x state, occupation x metro, industry x occupation",
+        "keys": ["soc", "naics4", "state_fips", "cbsa"],
+        "files": {"data": {"names": r"^usa_\d+$|ipums", "folders": r"ipums", "kinds": (".gz", ".csv", ".dat", ".parquet"), "tokens": ()},
+                  "ddi": {"names": r"^usa_\d+$|ipums", "folders": r"ipums", "kinds": (".xml",), "tokens": ()}}},
+    "onet_tasks": {
+        "title": "O*NET task statements and task ratings", "theme": "AI exposure",
+        "publisher": "O*NET Resource Center (US Department of Labor), database 29.0",
+        "url": "https://www.onetcenter.org/database.html",
+        "access": "open; POLISY_DA module 05 or module fetch downloads the text zip",
+        "grain": "occupation (O*NET-SOC) x task", "keys": ["soc"],
+        "files": {"tasks": {"names": r"^task_statements$", "kinds": (".txt", ".xlsx", ".csv"), "tokens": ("~onetsoccode", "~task")},
+                  "ratings": {"names": r"^task_ratings$", "kinds": (".txt", ".xlsx", ".csv"), "tokens": ("~onetsoccode", "~scaleid")}}},
     "vrscores": {
         "title": "VRscores workforce partisanship (employer, metro, industry, occupation panels)", "theme": "politics at work",
         "publisher": "Kagan, Frake & Hurst (Organization Science 2026)", "url": "https://dataverse.harvard.edu",
@@ -124,12 +187,21 @@ SOURCES = {
 
 
 # --------------------------------------------------------------------------- discovery
-EXTRA_EXTS = (".html", ".htm", ".7z", ".json")
+EXTRA_EXTS = (".html", ".htm", ".7z", ".json", ".gz", ".xml", ".dat")
+
+
+def _extra_clean(p):
+    """Clean name of a file polisy_core does not index: 'usa_00003.dat.gz' -> 'usa_00003'."""
+    stem = Path(p.stem)
+    if p.suffix.lower() == ".gz" and stem.suffix.lower() in (".csv", ".tsv", ".dat", ".txt"):
+        stem = Path(stem.stem)
+    return pc.clean_name(stem.name)[0]
 
 
 def _lab_items():
     """polisy_core's index of the search folders plus the lab's own download folder, 4 levels deep,
-    plus the file types polisy_core does not index (.html reports, .7z archives)."""
+    plus the file types polisy_core does not index (.html reports, .7z archives, gzipped tables, IPUMS
+    codebooks and fixed-width data)."""
     items = list(pc._index())
     seen = {str(i["path"]) for i in items}
     for root, depth in pc._roots():
@@ -137,7 +209,7 @@ def _lab_items():
             if kind == "file" and p.suffix.lower() in EXTRA_EXTS and str(p) not in seen:
                 seen.add(str(p))
                 try:
-                    items.append({"path": p, "kind": p.suffix.lower(), "clean": pc.clean_name(p.stem)[0],
+                    items.append({"path": p, "kind": p.suffix.lower(), "clean": _extra_clean(p),
                                   "size": p.stat().st_size, "mtime": p.stat().st_mtime})
                 except OSError:
                     pass
@@ -148,7 +220,7 @@ def _lab_items():
                 continue
             clean, ext = pc.clean_name(p.name)
             if kind == "file" and p.suffix.lower() in EXTRA_EXTS:
-                clean, ext = pc.clean_name(p.stem)[0], p.suffix.lower()
+                clean, ext = _extra_clean(p), p.suffix.lower()
             k = "dir" if kind == "dir" else ext
             if k:
                 try:
@@ -210,6 +282,7 @@ def discover(source, role):
             return found
         log(f"{key}: CONFIG path(s) not found, searching instead")
     rx = re.compile(spec["names"], re.I)
+    frx = re.compile(spec["folders"], re.I) if spec.get("folders") else None
     tokens = spec.get("tokens", ())
     hits, seen = [], set()
 
@@ -219,13 +292,17 @@ def discover(source, role):
             return
         seen.add(ident)
         hits.append((path, member, mtime))
+
+    def in_folder(path):                  # e.g. every file in POLISY/data/discern, whatever its name
+        return bool(frx) and bool(frx.search(pc.clean_name(Path(path).parent.name)[0]))
     for it in _lab_items():
         if it["kind"] == ".zip":
-            zip_named = bool(rx.search(it["clean"]))
+            zip_named = bool(rx.search(it["clean"])) or in_folder(it["path"])
             for name, clean, ext, size in _zip_tables(it["path"]):
-                if ext in spec["kinds"] and (zip_named or rx.search(clean)):
+                if ext in spec["kinds"] and (zip_named or rx.search(clean) or
+                                             (frx is not None and frx.search(pc.clean_name(Path(name).parent.name)[0]))):
                     add(it["path"], name, clean, size, it["mtime"])
-        elif it["kind"] in spec["kinds"] and rx.search(it["clean"]):
+        elif it["kind"] in spec["kinds"] and (rx.search(it["clean"]) or in_folder(it["path"])):
             add(it["path"], None, it["clean"], it["size"], it["mtime"])
     hits.sort(key=lambda h: h[2], reverse=True)
     out = [(p, m) for p, m, _ in hits]
@@ -377,17 +454,127 @@ def fetch_irs(raw, first=2011, last=2023):
     log(f"irs_migration: {got} new files downloaded ({len(have)} already present)")
 
 
-def fetch_patentsview(raw):
-    base = "https://s3.amazonaws.com/data.patentsview.org/download/"
-    for role, f in [("location", "g_location_disambiguated.tsv.zip"), ("patent", "g_patent.tsv.zip"),
-                    ("cpc", "g_cpc_current.tsv.zip"), ("inventor", "g_inventor_disambiguated.tsv.zip")]:
-        if discover("patentsview", role):
+def download(url, dest, timeout=900, chunk=1 << 22):
+    """Stream a (possibly multi-gigabyte) file to disk through a .part file; a zip is checked before it is kept."""
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_name(dest.name + ".part")
+    req = urllib.request.Request(url, headers=UA)
+    got, last = 0, 0
+    with urllib.request.urlopen(req, timeout=timeout) as r, open(part, "wb") as f:
+        total = int(r.headers.get("Content-Length") or 0)
+        while True:
+            b = r.read(chunk)
+            if not b:
+                break
+            f.write(b)
+            got += len(b)
+            if got - last >= 1e9:
+                last = got
+                log(f"  {dest.name}: {got / 1e9:.1f}" + (f" of {total / 1e9:.1f}" if total else "") + " GB")
+    if total and got != total:
+        part.unlink(missing_ok=True)
+        raise IOError(f"incomplete download ({got:,} of {total:,} bytes)")
+    if dest.suffix.lower() == ".zip" and not zipfile.is_zipfile(part):
+        part.unlink(missing_ok=True)
+        raise IOError("the download is not a zip file")
+    part.replace(dest)
+    return dest
+
+
+PV_BASE = "https://s3.amazonaws.com/data.patentsview.org/"
+# (source, role) -> (folder on PatentsView's server, table). Names and folders as listed in PatentsView's own
+# sources.yml (github.com/PatentsView/PatentsView-Code-Snippets, data-downloads).
+PV_FILES = {
+    ("patentsview", "patent"): ("download", "g_patent"),
+    ("patentsview", "application"): ("download", "g_application"),
+    ("patentsview", "cpc"): ("download", "g_cpc_current"),
+    ("patentsview", "inventor"): ("download", "g_inventor_disambiguated"),
+    ("patentsview", "location"): ("download", "g_location_disambiguated"),
+    ("patentsview", "assignee"): ("download", "g_assignee_disambiguated"),
+    ("patentsview", "cpc_title"): ("download", "g_cpc_title"),
+    ("patentsview", "abstract"): ("download", "g_patent_abstract"),
+    ("patentsview", "citation"): ("download", "g_us_patent_citation"),
+    ("patentsview_pregrant", "application"): ("pregrant_publications", "pg_published_application"),
+    ("patentsview_pregrant", "cpc"): ("pregrant_publications", "pg_cpc_current"),
+    ("patentsview_pregrant", "inventor"): ("pregrant_publications", "pg_inventor_disambiguated"),
+    ("patentsview_pregrant", "location"): ("pregrant_publications", "pg_location_disambiguated"),
+    ("patentsview_pregrant", "assignee"): ("pregrant_publications", "pg_assignee_disambiguated"),
+    ("patentsview_pregrant", "crosswalk"): ("pregrant_publications", "pg_granted_pgpubs_crosswalk"),
+    ("patentsview_pregrant", "abstract"): ("pregrant_publications", "pg_published_application_abstract"),
+}
+# What each step needs. "core" is enough for patents, filing years, places and the firm link by name.
+PV_SETS = {
+    "core": [("patentsview", r) for r in ("patent", "application", "cpc", "inventor", "location", "assignee", "cpc_title")],
+    "pregrant": [("patentsview_pregrant", r) for r in ("application", "cpc", "inventor", "location", "assignee", "crosswalk")],
+    "text": [("patentsview", "abstract"), ("patentsview_pregrant", "abstract")],
+    "citations": [("patentsview", "citation")],
+}
+
+
+def fetch_patentsview(dest=None, tables=("core", "pregrant")):
+    """Download PatentsView tables (as published, zipped) into dest, default lab/raw/patentsview.
+
+    `tables`: set names from PV_SETS ("core", "pregrant", "text", "citations") or table names such as
+    "g_application". A table already found in any search folder, under its PatentsView name, is skipped, so
+    your own copies are never downloaded again."""
+    dest = Path(dest) if dest else dirs()["RAW"] / "patentsview"
+    want = []
+    for t in tables:
+        want += PV_SETS.get(t, [k for k, v in PV_FILES.items() if v[1] == t])
+    for key in dict.fromkeys(want):
+        folder, table = PV_FILES[key]
+        have = discover(*key)
+        if have:
+            log(f"patentsview: {table} already present ({Path(have[0][0]).name})")
             continue
+        url = f"{PV_BASE}{folder}/{table}.tsv.zip"
         try:
-            _get(base + f, raw / "patentsview" / f, timeout=3600)
-            log(f"patentsview: {f} downloaded")
+            t0 = time.time()
+            p = download(url, dest / f"{table}.tsv.zip", timeout=3600)
+            log(f"patentsview: {table} downloaded ({p.stat().st_size / 1e9:.2f} GB, {time.time() - t0:.0f}s)")
         except Exception as e:
-            log(f"patentsview: {f} failed ({e}); copy your local file into a search folder")
+            log(f"patentsview: {table} failed ({type(e).__name__}: {e}); download {url} by hand into {dest}")
+
+
+def fetch_aipd(raw):
+    """The AI Patent Dataset's predictions file: the download links are read from the USPTO page."""
+    if discover("aipd", "predictions"):
+        log("aipd: already present")
+        return
+    page = SOURCES["aipd"]["url"]
+    try:
+        links = [u for u in _links(page, r'href="([^"]+\.(?:zip|csv|dta|tsv|gz))"')
+                 if re.search(r"ai_model_prediction|aipd|ai_patent|predictions", u, re.I)]
+    except Exception as e:
+        log(f"aipd: cannot read {page} ({type(e).__name__}: {e}). Download the predictions file (ai_model_predictions) "
+            f"by hand into POLISY/data/aipd")
+        return
+    if not links:
+        log(f"aipd: no predictions file linked on {page}; download it by hand into POLISY/data/aipd")
+    for u in links[:3]:
+        name = Path(urllib.parse.urlparse(u).path).name
+        try:
+            download(u, raw / "aipd" / name, timeout=3600)
+            log(f"aipd: {name} downloaded")
+        except Exception as e:
+            log(f"aipd: {u} failed ({type(e).__name__}: {e}); download it by hand into POLISY/data/aipd")
+
+
+ONET_ZIP = "https://www.onetcenter.org/dl_files/database/db_29_0_text.zip"
+
+
+def fetch_onet(raw):
+    """O*NET's text database (task statements and ratings); POLISY_DA module 05 downloads the same zip."""
+    if discover("onet_tasks", "tasks") and discover("onet_tasks", "ratings"):
+        log("onet_tasks: already present")
+        return
+    try:
+        download(ONET_ZIP, raw / "onet" / Path(ONET_ZIP).name, timeout=900)
+        log("onet_tasks: O*NET 29.0 text database downloaded")
+    except Exception as e:
+        log(f"onet_tasks: {ONET_ZIP} failed ({type(e).__name__}: {e}); download it by hand from "
+            "https://www.onetcenter.org/database.html (Text) into POLISY/data")
 
 
 GITHUB = "https://raw.githubusercontent.com/"
@@ -418,8 +605,9 @@ def fetch_github(raw):
                 log(f"{source}: {name} failed ({e}); download it from {url} into a search folder")
 
 
-def fetch_all(patentsview=False):
-    """Download what can be downloaded; never re-download a file that is already found."""
+def fetch_all(patentsview=False, pv_tables=("core", "pregrant")):
+    """Download what can be downloaded; never re-download a file that is already found. PatentsView and the AI
+    Patent Dataset (several gigabytes) only with patentsview=True."""
     raw = dirs()["RAW"]
     fetch_aioe(raw)
     fetch_zenodo(raw)
@@ -427,8 +615,10 @@ def fetch_all(patentsview=False):
     fetch_page_files(raw, "btos", "https://www.census.gov/hfp/btos/data_downloads", keep=r"\.(xlsx|csv|zip)$")
     fetch_page_files(raw, "cspp", "https://ippsr.msu.edu/public-policy/correlates-state-policy", keep=r"correlates|cspp|codebook")
     fetch_irs(raw)
+    fetch_onet(raw)
     if patentsview:
-        fetch_patentsview(raw)
+        fetch_patentsview(raw / "patentsview", pv_tables)
+        fetch_aipd(raw)
 
 
 # --------------------------------------------------------------------------- profiles

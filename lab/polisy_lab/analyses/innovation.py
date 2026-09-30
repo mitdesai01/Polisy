@@ -10,7 +10,8 @@ from . import needs
 
 
 def run():
-    pt = read("patents")
+    pt = read("patents", columns=["patent_id", "year", "ai", "ai_broad", "sub_ml", "sub_vision", "sub_language",
+                                  "sub_control", "sub_robotics"])   # 9 million rows: only the columns used
     if pt is None or pt.empty:
         return needs("patents", "AI patenting: growth, geography and technology", "AI & innovation", "patent/county/state",
                      "PatentsView g_patent, g_cpc_current, g_inventor_disambiguated, g_location_disambiguated",
