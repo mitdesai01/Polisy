@@ -372,11 +372,24 @@ def _delim(text):
     return max(counts, key=counts.get)
 
 
-def _text_tokens(raw, rows):
+def _delim_of(lines, ext=""):
+    """The separator of a text table: a tab for .tsv and .tab files; else the one the header line uses (the first
+    line that has any), because data rows full of prose (patent abstracts) hold more commas than tabs; else the most
+    frequent one over all the lines."""
+    if ext in (".tsv", ".tab"):
+        return "\t"
+    for line in lines:
+        counts = {d: line.count(d) for d in (",", "\t", ";", "|")}
+        if max(counts.values()) > 0:
+            return max(counts, key=counts.get)
+    return _delim("\n".join(lines))
+
+
+def _text_tokens(raw, rows, ext=""):
     lines = [x for x in raw.decode("utf-8-sig", "replace").splitlines() if x.strip()][:rows]
     if not lines:
         return set()
-    d = _delim("\n".join(lines))
+    d = _delim_of(lines, ext)
     return {squash(x) for line in lines for x in line.split(d)} - {""}
 
 
@@ -387,13 +400,13 @@ def _read_tokens(path, member, rows):
             with zipfile.ZipFile(path) as zf:
                 if ext in CSV_LIKE:
                     with zf.open(member) as fh:
-                        return _text_tokens(fh.read(1 << 18), rows)
+                        return _text_tokens(fh.read(1 << 18), rows, ext)
                 if zf.getinfo(member).file_size > 50e6:
                     return None
                 src = io.BytesIO(zf.read(member))
         elif ext in CSV_LIKE:
             with open(path, "rb") as fh:
-                return _text_tokens(fh.read(1 << 18), rows)
+                return _text_tokens(fh.read(1 << 18), rows, ext)
         else:
             src = path
         if ext in EXCEL:
@@ -703,7 +716,7 @@ def _read(src, ext, header_hint, columns, label):
     keep = (lambda c: squash(c) in columns) if columns else None
     if ext in CSV_LIKE:
         lines = _head(src).decode("utf-8-sig", "replace").splitlines()[:40]
-        sep = _delim("\n".join(x for x in lines if x.strip()))
+        sep = "\t" if ext in (".tsv", ".tab") else _delim("\n".join(x for x in lines if x.strip()))
         cells = [x.split(sep) for x in lines]
         skip = next(r for r in (_header_row(cells, h, e) for h, e in _passes(header_hint)) if r is not None) if cells else 0
         for enc in ("utf-8-sig", "latin-1"):

@@ -702,7 +702,7 @@ def _read_sample(path, member, ext, nrows):
         if zf is not None:
             zf.close()
     text = raw.decode("utf-8-sig", "replace")
-    sep = "\t" if ext in (".tsv", ".tab") else pc._delim("\n".join(text.splitlines()[:50]))
+    sep = pc._delim_of([x for x in text.splitlines()[:50] if x.strip()][:1], ext)
     return pd.read_csv(io.StringIO(text), sep=sep, dtype=str, on_bad_lines="skip", quoting=3 if sep == "\t" else 0)
 
 

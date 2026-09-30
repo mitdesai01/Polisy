@@ -74,7 +74,8 @@ def build(D):
         ["4000008", 0, "as-colt", None, None, "Colt's Manufacturing Company", "2", "loc-tx"],
     ])
     pv_zip(pv / "g_patent_abstract.tsv.zip", ["patent_id", "patent_abstract"], [
-        ["10000001", "A neural network analyzes medical images and diagnoses diseases. The system predicts patient outcomes."],
+        ["10000001", "A neural network analyzes medical images and diagnoses diseases. The system predicts patient outcomes, "
+                     "risks, and costs, and it ranks, filters, and sorts cases, using a processor, a memory, and a display."],
         ["10000002", "The system detects objects and classifies images captured by cameras."],
         ["10000005", "A rifle with a recoil spring."], ["11000006", "Qubits are corrected."],
         ["11000007", "A language model generates text and answers questions from customers."],
