@@ -218,7 +218,7 @@ def adapt_aipd():
             + (f" (from {len(staged)} files)" if len(staged) > 1 else ""))
         return True
     finally:
-        c.close()
+        sg.close(c)
 
 
 def _aipd_view(c, patents=True):
@@ -236,7 +236,7 @@ def _aipd_view(c, patents=True):
 
 # --------------------------------------------------------------------------- shared SQL
 def _cpc_table(c, key):
-    """Per document: AI subfields, climate, weapons, number of classes, main subclass, list of subclasses."""
+    """Per document: AI subfields, climate, weapons, number of classes and subclasses, main subclass."""
     subs = ",\n".join(f"bool_or({cond}) AS {name}" for name, cond in AI_RULES.items())
     flags = ",\n".join(f"bool_or({cond}) AS {name}" for name, cond in FLAGS.items())
     code = "upper(replace(grp, ' ', ''))"
@@ -244,7 +244,7 @@ def _cpc_table(c, key):
         WITH x AS (SELECT {key} AS id, seq, {code} AS c, split_part({code}, '/', 1) AS g,
                           coalesce(nullif(upper(trim(subclass)), ''), substr({code}, 1, 4)) AS s FROM cpc)
         SELECT id, {subs}, {flags}, count(*) AS n_cpc, count(DISTINCT s) AS n_subclasses,
-               arg_min(s, coalesce(seq, 999999)) AS main_subclass, list(DISTINCT s) AS subclasses
+               arg_min(s, coalesce(seq, 999999)) AS main_subclass
         FROM x GROUP BY 1""")
 
 
@@ -340,7 +340,7 @@ def adapt_patentsview():
         parts = _aipd_view(c, patents=True)
         c.execute(f"""CREATE OR REPLACE TABLE pats AS
             SELECT p.patent_id, p.year, p.grant_date, a.app_year, a.filing_date, p.num_claims, {_flag_select(parts)},
-                   x.subclasses, i.n_inventors, i.n_us_inventors, i.first_inventor_state,
+                   i.n_inventors, i.n_us_inventors, i.first_inventor_state,
                    s.assignee_id, s.assignee_org, s.assignee_type, s.n_assignees
             FROM pat p LEFT JOIN app a USING (patent_id) LEFT JOIN cpcx x ON x.id = p.patent_id
                  LEFT JOIN invs i ON i.id = p.patent_id LEFT JOIN asg s ON s.id = p.patent_id
@@ -359,12 +359,12 @@ def adapt_patentsview():
             if both[1] and both[2]:
                 log(f"patentsview: of the AIPD's AI patents, {both[0] / both[1]:.0%} carry a broad AI CPC code; of the broad CPC "
                     f"AI patents, {both[0] / both[2]:.0%} are AI for the AIPD")
-        _copy(c, "SELECT * EXCLUDE (subclasses) FROM pats", "patents")
+        _copy(c, "SELECT * FROM pats", "patents")
         _places(c)
         _edges_and_moves(c)
         return True
     finally:
-        c.close()
+        sg.close(c)
 
 
 def _places(c):
@@ -389,7 +389,9 @@ def _places(c):
 
 
 def _edges_and_moves(c):
-    _copy(c, """WITH a AS (SELECT patent_id, year, unnest(subclasses) AS s FROM pats WHERE ai_broad),
+    _copy(c, """WITH a AS (SELECT DISTINCT k.patent_id, p.year,
+                                  coalesce(nullif(upper(trim(k.subclass)), ''), substr(upper(replace(k.grp, ' ', '')), 1, 4)) AS s
+                           FROM cpc k JOIN pats p USING (patent_id) WHERE p.ai_broad),
                      e AS (SELECT x.s AS a, y.s AS b, CASE WHEN x.year < 2010 THEN 'before 2010' WHEN x.year < 2015 THEN '2010-2014'
                                   WHEN x.year < 2020 THEN '2015-2019' ELSE '2020 on' END AS period
                            FROM a x JOIN a y ON x.patent_id = y.patent_id AND x.s < y.s)
@@ -481,7 +483,7 @@ def adapt_pregrant():
             _copy(c, "SELECT * FROM aplaces", "application_places")
         return True
     finally:
-        c.close()
+        sg.close(c)
 
 
 # --------------------------------------------------------------------------- inventions by filing year
@@ -523,4 +525,4 @@ def adapt_inventions():
             _copy(c, sql, f"inventions_{lvl}_year")
         return True
     finally:
-        c.close()
+        sg.close(c)

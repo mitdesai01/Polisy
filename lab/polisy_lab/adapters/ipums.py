@@ -182,7 +182,7 @@ def adapt_ipums():
         _copy(c, "SELECT indnaics, occsoc, sum(w) AS workers, count(*) AS n FROM p GROUP BY 1, 2", "acs_ind_occ")
         return True
     finally:
-        c.close()
+        sg.close(c)
 
 
 # --------------------------------------------------------------------------- links used by link.py

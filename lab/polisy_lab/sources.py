@@ -644,20 +644,19 @@ def fetch_all(patentsview=False, pv_tables=("core", "pregrant")):
 
 # --------------------------------------------------------------------------- profiles
 def profile_file(path, member=None, nrows=20000):
-    """Columns, types, missingness, distinct counts and examples of one file (a sample of rows)."""
+    """Columns, types, missingness, distinct counts and examples of one file, from a sample of its first rows: a
+    multi-gigabyte download (the AI Patent Dataset, PatentsView, an IPUMS extract) is never read whole here."""
     path = Path(path)
-    ext = Path(member or path.name).suffix.lower()
+    name = (member or path.name).lower()
+    ext = Path(name[:-3] if name.endswith(".gz") else name).suffix
     try:
-        if ext in (".tsv",) or (ext == ".zip" and member and member.lower().endswith(".tsv")):
-            df = _read_tsv_sample(path, member, nrows)
-        elif ext == ".dta" and not member:
-            with pd.read_stata(path, iterator=True) as r:
-                df = r.read(nrows)
-        elif ext == ".html":
-            return {"file": str(path), "kind": "html report", "size_mb": round(path.stat().st_size / 1e6, 1)}
-        else:
-            df = pc.read_table(path, member)
-            df = df.head(nrows)
+        size = path.stat().st_size
+        if ext in (".html", ".htm", ".json", ".xml", ".7z"):
+            return {"file": str(path), "kind": ext.lstrip("."), "size_mb": round(size / 1e6, 1)}
+        df = _read_sample(path, member, ext, nrows)
+        if df is None:
+            return {"file": str(path) + (f" :: {member}" if member else ""), "kind": f"{ext.lstrip('.')} (too large to sample here)",
+                    "size_mb": round(size / 1e6, 1)}
     except Exception as e:
         return {"file": str(path), "error": f"{type(e).__name__}: {e}"}
     cols = []
@@ -671,12 +670,40 @@ def profile_file(path, member=None, nrows=20000):
             "fields": cols, "size_mb": round(path.stat().st_size / 1e6, 1)}
 
 
-def _read_tsv_sample(path, member, nrows):
-    if member:
-        with zipfile.ZipFile(path) as zf, zf.open(member) as fh:
-            head = b"".join(fh.readline() for _ in range(nrows + 1))
-        return pd.read_csv(io.BytesIO(head), sep="\t", dtype=str, on_bad_lines="skip", quoting=3)
-    return pd.read_csv(path, sep="\t", dtype=str, nrows=nrows, on_bad_lines="skip", quoting=3)
+def _read_sample(path, member, ext, nrows):
+    """The first nrows rows of a table, reading only those (text tables line by line, Parquet by its first batch,
+    Stata through its iterator); workbooks are small and read by polisy_core. None: a zipped Stata file over 200 MB."""
+    import gzip
+    import itertools
+    if ext in (".xlsx", ".xlsm", ".xls"):
+        return pc.read_table(path, member).head(nrows)
+    if ext == ".parquet" and member is None:
+        import pyarrow.parquet as papq
+        f = papq.ParquetFile(path)
+        return next(f.iter_batches(batch_size=nrows)).to_pandas() if f.metadata.num_rows else pd.DataFrame()
+    if ext == ".dta":
+        if member is None:
+            with pd.read_stata(path, iterator=True) as r:
+                return r.read(nrows)
+        with zipfile.ZipFile(path) as zf:
+            if zf.getinfo(member).file_size > 200e6:
+                return None
+        return pc.read_table(path, member).head(nrows)
+    if member is not None:
+        zf = zipfile.ZipFile(path)
+        fh = zf.open(member)
+    else:
+        zf = None
+        fh = gzip.open(path, "rb") if str(path).lower().endswith(".gz") else open(path, "rb")
+    try:
+        raw = b"".join(itertools.islice(fh, nrows + 1))
+    finally:
+        fh.close()
+        if zf is not None:
+            zf.close()
+    text = raw.decode("utf-8-sig", "replace")
+    sep = "\t" if ext in (".tsv", ".tab") else pc._delim("\n".join(text.splitlines()[:50]))
+    return pd.read_csv(io.StringIO(text), sep=sep, dtype=str, on_bad_lines="skip", quoting=3 if sep == "\t" else 0)
 
 
 def profile_all():

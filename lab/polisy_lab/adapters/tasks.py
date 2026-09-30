@@ -342,4 +342,4 @@ def adapt_patent_tasks():
             f"least one occupation through an occupation-specific pair")
         return True
     finally:
-        c.close()
+        sg.close(c)

@@ -36,17 +36,51 @@ def scratch():
     return p
 
 
+_WORK = {}
+
+
+def _ram():
+    """Physical memory in bytes, or None where it cannot be read."""
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (ValueError, OSError, AttributeError):
+        try:
+            import psutil
+            return psutil.virtual_memory().total
+        except Exception:
+            return None
+
+
 def con(threads=None):
-    """A DuckDB connection that spills to local scratch disk (never to Drive)."""
+    """A DuckDB connection for big tables: its work tables live in a database file on local scratch disk (not in
+    memory), it may use half the machine's memory (the rest is left to Python), and it spills to scratch disk beyond
+    that. Close it with close(c), which deletes the work file."""
     import duckdb
-    c = duckdb.connect()
+    import uuid
+    path = scratch() / f"work_{uuid.uuid4().hex[:12]}.duckdb"
+    c = duckdb.connect(str(path))
+    _WORK[id(c)] = path
     tmp = scratch() / "duckdb_tmp"
     tmp.mkdir(exist_ok=True)
     c.execute(f"SET temp_directory = '{pc.sqlp(tmp)}'")
     c.execute("SET preserve_insertion_order = false")
+    ram = _ram()
+    if ram:
+        c.execute(f"SET memory_limit = '{max(1, int(ram * 0.5 / 2 ** 30))}GB'")
     if threads:
         c.execute(f"SET threads TO {int(threads)}")
     return c
+
+
+def close(c):
+    """Close a connection from con() and delete its work file."""
+    try:
+        c.close()
+    finally:
+        path = _WORK.pop(id(c), None)
+        if path is not None:
+            for p in (path, Path(str(path) + ".wal")):
+                Path(p).unlink(missing_ok=True)
 
 
 def staged_path(source, table):
@@ -119,7 +153,7 @@ def reader(p):
         d = pc.sniff_delim(p)
         delim = "\\t" if d == "\t" else d
     return (f"read_csv('{pc.sqlp(p)}', delim='{delim}', header=true, quote='\"', escape='\"', all_varchar=true, "
-            f"ignore_errors=true, max_line_size=50000000)")
+            f"ignore_errors=true)")
 
 
 def dta_to_parquet(p, chunk=500_000):
@@ -210,7 +244,7 @@ def stage(source, table, found, spec, select=None, where="", keep=False):
         log(f"{source}/{table}: staged {n:,} rows from {Path(member or path).name}")
         return out, m
     finally:
-        c.close()
+        close(c)
         if tmp is not None and not keep:
             Path(tmp).unlink(missing_ok=True)
 

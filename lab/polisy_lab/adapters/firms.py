@@ -79,7 +79,7 @@ def _columns_of(path, member):
     try:
         return sg.columns(c, rd)
     finally:
-        c.close()
+        sg.close(c)
         if tmp is not None:
             Path(tmp).unlink(missing_ok=True)
 
@@ -207,7 +207,7 @@ def adapt_discern():
             log(f"discern: {pc.q1(c, 'SELECT count(*) FROM dn'):,} firm and subsidiary names for the assignee name match")
         return wrote
     finally:
-        c.close()
+        sg.close(c)
 
 
 # --------------------------------------------------------------------------- assignee names -> gvkey
@@ -230,7 +230,7 @@ def _compustat_names():
                                min({yr}) AS fy0, max({yr}) AS fy1 FROM {rd} GROUP BY 1, 2""")
         return d.dropna(subset=["gvkey", "name"]).assign(source="compustat")
     finally:
-        c.close()
+        sg.close(c)
         if tmp is not None:
             Path(tmp).unlink(missing_ok=True)
 
@@ -255,7 +255,7 @@ def _assignees():
         return pc.q(c, f"""SELECT assignee_id, mode(org) AS org, mode(atype) AS atype, count(*) AS docs, min(y) AS y0, max(y) AS y1
                            FROM ({' UNION ALL '.join(parts)}) WHERE org IS NOT NULL AND org <> '' GROUP BY 1""")
     finally:
-        c.close()
+        sg.close(c)
 
 
 def match_assignees():
@@ -400,7 +400,7 @@ def adapt_patent_firms():
         _application_firms(c)
         return True
     finally:
-        c.close()
+        sg.close(c)
 
 
 def _application_firms(c):
@@ -451,7 +451,7 @@ def adapt_citations():
                      FROM p LEFT JOIN b USING (patent_id) LEFT JOIN f USING (patent_id)""", "patent_citations")
         return True
     finally:
-        c.close()
+        sg.close(c)
 
 
 # --------------------------------------------------------------------------- the firm-year panel
@@ -548,7 +548,7 @@ def build_firm_panel():
                        FROM fy FULL JOIN gy USING (gvkey, year) LEFT JOIN ex USING (gvkey, year) {extra}
                        ORDER BY gvkey, year""")
     finally:
-        c.close()
+        sg.close(c)
     num = [x for x in d.columns if x not in ("gvkey", "year")]
     fill = [x for x in num if x.endswith(("_filed", "_granted", "_covered", "_pending")) or x in ("pat_discern", "pat_name")]
     d[fill] = d[fill].fillna(0)
