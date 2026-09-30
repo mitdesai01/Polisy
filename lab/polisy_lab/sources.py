@@ -121,7 +121,8 @@ SOURCES = {
         "access": "open; module fetch looks for the download links on the page, otherwise save the predictions file by hand",
         "grain": "patent or pre-grant publication (doc_id, flag_patent)", "keys": ["patent_id", "pgpub_id"],
         "files": {"predictions": {"names": r"ai_model_predictions|^aipd|ai_patent_dataset|artificial_intelligence_patent",
-                                  "folders": r"^aipd$", "kinds": (".zip", ".csv", ".tsv", ".dta", ".parquet", ".gz"), "tokens": ()}}},
+                                  "folders": r"^aipd$", "kinds": (".zip", ".csv", ".tsv", ".dta", ".parquet", ".gz"), "tokens": (),
+                                  "many": True}}},
     "discern": {
         "title": "DISCERN 2.0: which Compustat firm owns each patent (subsidiaries and ownership changes included), 1980-2021",
         "theme": "innovation", "publisher": "Arora, Belenzon & Sheer (Duke); DISCERN 2.0",

@@ -140,39 +140,54 @@ def _copy(c, sql, name):
 
 
 # --------------------------------------------------------------------------- AI Patent Dataset
+def _stage_aipd(c, path, member):
+    """One AI Patent Dataset file -> staged Parquet (doc_id, flag_patent, predictNN_*, ai_score_*), or None when the
+    file holds no predictions (documentation, training data)."""
+    name = re.sub(r"[^a-z0-9]+", "_", Path(member or path).name.lower())
+    out = sg.staged_path("aipd", f"predictions_{name}")
+    if sg.fresh(out, path, member):
+        return out
+    rd, tmp = sg.readable(path, member)
+    try:
+        cols = sg.columns(c, rd)
+        low = {col.lower(): col for col in cols}
+        doc = sg.exact_col(cols, ["docid", "documentid", "docnumber", "patentid", "patentnumber", "pubno"])
+        keep = [col for lc, col in low.items() if re.fullmatch(r"predict\d+_[a-z_]+|ai_score_[a-z_]+", lc)]
+        if doc is None or not keep:
+            log(f"aipd: {Path(member or path).name} has no document ids or no AI predictions, so it is not used "
+                f"(columns {cols[:10]})")
+            return None
+        flag = sg.exact_col(cols, ["flagpatent", "ispatent", "patentflag"])
+        sel = [f"{sg.pc_quote(doc)} AS doc_id"] + ([f"{sg.pc_quote(flag)} AS flag_patent"] if flag else []) + \
+              [f"{sg.pc_quote(col)} AS {col.lower()}" for col in keep]
+        out.parent.mkdir(parents=True, exist_ok=True)
+        c.execute(f"COPY (SELECT {', '.join(sel)} FROM {rd}) TO '{pc.sqlp(out)}' (FORMAT parquet, COMPRESSION zstd)")
+        sg.write_stamp(out, path, member, columns={"doc_id": doc, "flag_patent": flag, "labels": keep})
+        log(f"aipd: staged {sg.rows(out):,} documents from {Path(member or path).name} "
+            f"({len(keep)} label columns, e.g. {', '.join(keep[:4])})")
+        return out
+    finally:
+        if tmp is not None:
+            Path(tmp).unlink(missing_ok=True)
+
+
 def adapt_aipd():
-    """The AI Patent Dataset -> staged columns (doc_id, flag_patent, predictNN_*, ai_score_*) -> canonical aipd."""
+    """The AI Patent Dataset -> staged columns -> canonical aipd. Every predictions file found is read (a release may
+    come as one file, or as one for patents and one for published applications); where two files hold the same
+    document, the newer file wins."""
     found = discover("aipd", "predictions")
     if not found:
         log(f"aipd: not found. Save the AI Patent Dataset's predictions file (ai_model_predictions, from {SOURCES['aipd']['url']}) "
             "in POLISY/data/aipd; until then AI patents are identified by CPC codes only")
         return False
-    path, member = found[0]
-    out = sg.staged_path("aipd", "predictions")
     c = sg.con()
     try:
-        if not sg.fresh(out, path, member):
-            rd, tmp = sg.readable(path, member)
-            try:
-                cols = sg.columns(c, rd)
-                low = {col.lower(): col for col in cols}
-                doc = sg.exact_col(cols, ["docid", "documentid", "docnumber", "patentid", "patentnumber", "pubno"])
-                if doc is None:
-                    log(f"aipd: no document id column (doc_id) in {Path(member or path).name}; columns are {cols[:20]}")
-                    return False
-                flag = sg.exact_col(cols, ["flagpatent", "ispatent", "patentflag"])
-                keep = [col for lc, col in low.items() if re.fullmatch(r"predict\d+_[a-z_]+|ai_score_[a-z_]+", lc)]
-                sel = [f"{sg.pc_quote(doc)} AS doc_id"] + ([f"{sg.pc_quote(flag)} AS flag_patent"] if flag else []) + \
-                      [f"{sg.pc_quote(col)} AS {col.lower()}" for col in keep]
-                out.parent.mkdir(parents=True, exist_ok=True)
-                c.execute(f"COPY (SELECT {', '.join(sel)} FROM {rd}) TO '{pc.sqlp(out)}' (FORMAT parquet, COMPRESSION zstd)")
-                sg.write_stamp(out, path, member, columns={"doc_id": doc, "flag_patent": flag, "labels": keep})
-                log(f"aipd: staged {sg.rows(out):,} documents from {Path(member or path).name} "
-                    f"({len(keep)} label columns, e.g. {', '.join(keep[:4])})")
-            finally:
-                if tmp is not None:
-                    Path(tmp).unlink(missing_ok=True)
-        cols = [r[0] for r in c.execute(f"DESCRIBE SELECT * FROM read_parquet('{pc.sqlp(out)}')").fetchall()]
+        staged = [x for x in (_stage_aipd(c, p, m) for p, m in found) if x is not None]     # newest file first
+        if not staged:
+            return False
+        c.execute("CREATE OR REPLACE VIEW aipd_raw AS " + " UNION ALL BY NAME ".join(
+            f"SELECT *, {i} AS src_rank FROM read_parquet('{pc.sqlp(x)}')" for i, x in enumerate(staged)))
+        cols = [r[0] for r in c.execute("DESCRIBE SELECT * FROM aipd_raw").fetchall()]
         want = int(LAB["SETTINGS"].get("aipd_threshold", 50))
         levels = sorted({int(m.group(1)) for col in cols for m in [re.fullmatch(r"predict(\d+)_any_ai", col)] if m})
         if levels:
@@ -193,13 +208,14 @@ def adapt_aipd():
             how = f"the highest ai_score_* at {want / 100:.2f}"
         is_pat = ("coalesce(try_cast(try_cast(flag_patent AS DOUBLE) AS INTEGER) = 1, length(regexp_extract(doc_id, '(\\d+)', 1)) <= 8)"
                   if "flag_patent" in cols else "length(regexp_extract(doc_id, '(\\d+)', 1)) <= 8")
-        sql = (f"SELECT {_norm_id('doc_id')} AS doc_id, {is_pat} AS is_patent, {ai} AS ai, {ai_strict} AS ai_strict"
-               + "".join(f", {cond} AS aipd_{p}" for p, cond in part.items())
-               + f" FROM read_parquet('{pc.sqlp(out)}') WHERE regexp_extract(doc_id, '(\\d+)', 1) <> ''"
-               + " QUALIFY row_number() OVER (PARTITION BY doc_id, is_patent ORDER BY ai DESC) = 1")
-        _copy(c, sql, "aipd")
+        inner = (f"SELECT {_norm_id('doc_id')} AS doc_id, {is_pat} AS is_patent, {ai} AS ai, {ai_strict} AS ai_strict"
+                 + "".join(f", {cond} AS aipd_{p}" for p, cond in part.items())
+                 + ", src_rank FROM aipd_raw WHERE regexp_extract(doc_id, '(\\d+)', 1) <> ''")
+        _copy(c, f"SELECT * EXCLUDE (src_rank) FROM ({inner}) "
+                 "QUALIFY row_number() OVER (PARTITION BY doc_id, is_patent ORDER BY src_rank, ai DESC) = 1", "aipd")
         n, npat, nai = c.execute(f"SELECT count(*), sum(is_patent::INT), sum(ai::INT) FROM read_parquet('{pc.sqlp(canon('aipd'))}')").fetchone()
-        log(f"aipd: AI label = {how}; {npat:,} patents and {n - npat:,} published applications, {nai / max(n, 1):.1%} AI")
+        log(f"aipd: AI label = {how}; {npat:,} patents and {n - npat:,} published applications, {nai / max(n, 1):.1%} AI"
+            + (f" (from {len(staged)} files)" if len(staged) > 1 else ""))
         return True
     finally:
         c.close()
