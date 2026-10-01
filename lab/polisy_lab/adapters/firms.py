@@ -588,8 +588,11 @@ def adapt_patent_firms():
                 log(f"patent_firm: {both:,} patents are in both DISCERN's grant- and application-dated files; the owner differs "
                     f"for {both - same:,} ({(both - same) / both:.1%}: sold between filing and grant); the owner at {owner} is used "
                     "(LAB SETTINGS discern_owner: 'filing' or 'grant')")
-            # DISCERN covers every grant up to the last year of its grant-dated file; later grants only where it has them
-            last = pc.q1(c, "SELECT max(p.year) FROM dall JOIN p USING (patent_id) WHERE f = 'grant'") or \
+            # DISCERN covers every grant up to the last fiscal year of its grant-dated file (fiscal years end in other
+            # months, so its last fiscal year also holds some grants of the next calendar year); later grants only where
+            # it has them
+            gfile = "WHERE d.discern_file = 'grant'" if dfile != "'grant'" else ""
+            last = pc.q1(c, f"SELECT max(d.discern_year) FROM d {gfile}") or \
                 pc.q1(c, "SELECT max(p.year) FROM dl JOIN p USING (patent_id)")
         else:
             c.execute("CREATE OR REPLACE TABLE dl AS SELECT NULL::VARCHAR AS patent_id, NULL::VARCHAR AS gvkey WHERE FALSE")

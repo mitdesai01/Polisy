@@ -21,7 +21,7 @@ import zipfile
 import numpy as np
 import pandas as pd
 
-from .core import log, read, write, diagnostic, pc, squash, find_col, to_state_fips
+from .core import LAB, log, read, write, diagnostic, pc, squash, find_col, to_state_fips
 
 NAICS_SECTORS = {"11": "agriculture forestry fishing and hunting", "21": "mining quarrying and oil and gas extraction",
                  "22": "utilities", "23": "construction", "31": "manufacturing", "32": "manufacturing", "33": "manufacturing",
@@ -338,6 +338,20 @@ def _flows_by(flows, key):
     return t
 
 
+def _cspp_choose(cat):
+    """CSPP variables for the state panel: those named in LAB SETTINGS cspp_vars, else the curated ones the file has,
+    else the best covered per theme."""
+    want = LAB["SETTINGS"].get("cspp_vars") or []
+    if want:
+        have = set(cat.variable)
+        miss = [v for v in want if v not in have]
+        if miss:
+            log(f"panel_state_year: cspp_vars not in your CSPP file: {', '.join(miss)}")
+        return {"chosen (cspp_vars)": [v for v in want if v in have]}
+    cur = list(cat.variable[cat.curated]) if "curated" in cat else []
+    return {"curated": cur} if cur else _cspp_pick(cat)
+
+
 def _cspp_pick(cat, per_theme=3):
     picks = {}
     for theme in ("ideology", "party control", "policy", "innovation", "economy", "education"):
@@ -403,9 +417,13 @@ def panel_state_year(years=range(2000, 2026)):
         p = p.merge(io.rename(columns={"dest": "state_fips"}), on=["state_fips", "year"], how="left")
     cs, cat = read("cspp_state_year"), read("cspp_catalog")
     if cs is not None and cat is not None:
-        cur = list(cat.variable[cat.curated]) if "curated" in cat else []
-        picks = {"curated": cur} if cur else _cspp_pick(cat)
+        picks = _cspp_choose(cat)
         keep = sorted({v for vs in picks.values() for v in vs if v in cs})
+        if not keep:
+            log(f"panel_state_year: no CSPP variable used: your CSPP file ({len(cat)} variables) has none of the curated ones "
+                "and none tagged ideology, party control, policy, innovation, economy or education that covers 2010 on. "
+                "The variables and their descriptions are in canonical cspp_catalog; name the ones to use in LAB SETTINGS "
+                "cspp_vars")
         if keep:
             p = p.merge(cs[["state_fips", "year"] + keep].rename(columns={v: "cspp_" + v for v in keep}), on=["state_fips", "year"], how="left")
             desc = dict(zip(cat.variable, cat.description)) if "description" in cat else {}

@@ -143,7 +143,8 @@ def build_firms(D):
                   ["10000002", "2020-01-07", ibm, 2020, "INTERNATIONAL BUSINESS MACHINES", 12, "U", 12490.0],
                   ["5500000", "1996-03-05", ibm, 1996, "INTERNATIONAL BUSINESS MACHINES", 12, "U", 12490.0],
                   ["4000008", "1977-02-01", "COLT INDUSTRIES INC", 1977, "COLT INDUSTRIES", 13, "U", 11111.0],
-                  ["10000009", "2019-10-01", "CYBER SYSTEMS INC", 2019, "CYBER SYSTEMS", 14, "S", 90319.0]],
+                  ["10000009", "2019-10-01", "CYBER SYSTEMS INC", 2019, "CYBER SYSTEMS", 14, "S", 90319.0],
+                  ["10000005", "2021-03-02", "HECKLER & KOCH GMBH", 2020, "HECKLER & KOCH", 22, "S", 88888.0]],
                  columns=cols).to_csv(d / "discern_pat_grant_1980_2021.csv", index=False)
     # owner at filing, for patents applied for in 1980-2021 (10000005 was granted in 2021, after the grant file's last year)
     pd.DataFrame([["10000001", "2017-03-01", "GOOGLE LLC", 2017, "GOOGLE", 11, "U", 90319.0],

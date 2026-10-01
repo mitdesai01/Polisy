@@ -204,20 +204,27 @@ def _pins(k, s):
     return n
 
 
+# SOC 2018 broad occupations whose detailed codes run past nine: Physicians (29-1210) holds 29-1211 to 29-1229
+SOC_SPILL = {"29122": "291210"}
+
+
 def occsoc_for(soc, codes):
     """The most specific OCCSOC code that covers a SOC code ('15-1252' -> '151252', else '112030' for '11-2032', else
-    '1512XX' ...)."""
+    '1512XX' ...; '29-1229' -> '291210', see SOC_SPILL)."""
     s = re.sub(r"\D", "", str(soc))
     if len(s) != 6:
         return None
     best, spec = None, -1
-    for code in codes:
-        k = str(code).strip().upper()
-        if len(k) != 6 or not k[:2].isdigit():
+    for target in (s, SOC_SPILL.get(s[:5])):
+        if target is None or best is not None:
             continue
-        n = _pins(k, s)
-        if n > spec:
-            best, spec = code, n
+        for code in codes:
+            k = str(code).strip().upper()
+            if len(k) != 6 or not k[:2].isdigit():
+                continue
+            n = _pins(k, target)
+            if n > spec:
+                best, spec = code, n
     return best
 
 

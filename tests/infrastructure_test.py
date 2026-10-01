@@ -136,7 +136,8 @@ def main():
     from polisy_lab.core import RESULTS
     oos = [x for x in RESULTS["diagnostics"] if x["step"] == "name match agrees with DISCERN (out of sample)"]
     ok.append(check(oos and oos[0]["matched"] == 3 and oos[0]["total"] == 3 and "names as known in 2017" in oos[0]["note"],
-                    "the name match scored out of sample: names as known in 2017 against DISCERN's grants of 2018-2020"))
+                    "the name match scored out of sample: names as known in 2017 against DISCERN's grants of 2018-2020 "
+                    "(DISCERN ends with its last fiscal year, 2020, though a grant of fiscal 2020 came in 2021)"))
     fp = read("firm_patents_year", "PANELS").set_index(["gvkey", "year"])
     ok.append(check(("002993", 1975) not in fp.index and ("002993", 1977) in fp.index and fp.index.get_level_values("year").min() >= 1977,
                     "firm panel starts with the first grant year: a 1975 filing is left out, its 1977 grant kept"))
@@ -198,10 +199,19 @@ def main():
     from polisy_lab.adapters.ipums import occsoc_for
     ok.append(check(occsoc_for("47-2061", occ.index) == "4720XX" and occsoc_for("15-1252", occ.index) == "151252",
                     "SOC 2018 codes find their OCCSOC code, X digits as wildcards"))
-    grouped = ["112030", "1120XX", "151252", "4750YY", "13102X"]
-    ok.append(check([occsoc_for(s, grouped) for s in ("11-2032", "15-1252", "47-5041", "13-1023", "15-1132")]
-                    == ["112030", "151252", "4750YY", "13102X", None],
-                    "OCCSOC groups: a broad SOC code (trailing zero), X or Y; a SOC 2010 code alone finds none"))
+    grouped = ["112030", "1120XX", "151252", "4750YY", "13102X", "291210", "291240"]
+    ok.append(check([occsoc_for(s, grouped) for s in ("11-2032", "15-1252", "47-5041", "13-1023", "15-1132", "29-1216", "29-1229", "29-1242")]
+                    == ["112030", "151252", "4750YY", "13102X", None, "291210", "291210", "291240"],
+                    "OCCSOC groups: a broad SOC code (trailing zero), X or Y, physicians 29-1221..1229 in 29-1210; a SOC 2010 "
+                    "code alone finds none"))
+    from polisy_lab import link as L
+    cat = pd.DataFrame({"variable": ["frent", "gayempnondisc"], "curated": [False, False], "ideology": [False, False],
+                        "coverage_2010plus": [0.9, 0.9], "last_year": [2020, 2020]})
+    LAB["SETTINGS"]["cspp_vars"] = ["frent", "nosuch"]
+    chosen = L._cspp_choose(cat)
+    LAB["SETTINGS"]["cspp_vars"] = []
+    ok.append(check(chosen == {"chosen (cspp_vars)": ["frent"]} and L._cspp_choose(cat) == {"ideology": []},
+                    "CSPP variables chosen by name in LAB SETTINGS cspp_vars, else by theme"))
     from polisy_lab.adapters.politics import THEMES
     import re as _re
     tags = {d: [t for t, rx in THEMES.items() if _re.search(rx, d.lower())] for d in (

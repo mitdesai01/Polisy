@@ -29,7 +29,7 @@ for _cand in (_HERE.parent.parent / "POLISY_DA", _HERE.parent, Path("/content/po
         sys.path.insert(0, str(_cand))
 import polisy_core as pc  # noqa: E402
 
-__version__ = "0.3.4 (2026-09-30) patent, firm, IPUMS and task layers; DISCERN 2.0 as published"
+__version__ = "0.3.5 (2026-10-01) patent, firm, IPUMS and task layers; DISCERN 2.0 as published"
 
 # --------------------------------------------------------------------------- config
 LAB_ROOT = Path(os.environ.get("POLISY_LAB_ROOT", pc.ROOT / "lab"))
@@ -51,6 +51,8 @@ LAB = {
         "name_fill": "after_discern",    # patents the assignee-name match links to firms: "after_discern" (grants after the
                                          # last year of DISCERN's grant file that DISCERN leaves unlinked), "unlinked" (any
                                          # patent DISCERN leaves unlinked) or "none"
+        "cspp_vars": [],                 # CSPP variables for the state panel, by name (the catalog lists them); empty:
+                                         # the curated ones the file has, else the best covered per theme
         "discern_owner": "filing",       # a patent's owner when DISCERN's grant- and application-dated files differ: at
                                          # "filing" (the firm whose R&D filed it; the panel counts by filing year) or "grant"
         "name_min_score": 95,            # fuzzy name matches below this score (0-100) are not used
