@@ -227,6 +227,17 @@ def main():
     old = link._occupation_extras(pd.DataFrame({"soc": ["15-1132"], "soc2018": ["15-1252"], "workers": [1.0]}))
     ok.append(check(old.acs_workers.iloc[0] == 150, "a code the ACS lacks (SOC 2010) falls back to its SOC 2018 link"))
 
+    from polisy_lab.adapters import tasks as TK
+    from polisy_lab import staging as SG
+    c = SG.con()
+    c.execute("CREATE TABLE u AS SELECT * FROM (VALUES ('d1'), ('d2')) t(doc_id)")
+    dup = TK._one_per_doc(c, "ta", "SELECT * FROM (VALUES ('d1', 'short'), ('d1', 'a   longer  abstract here'), ('d2', 'one two three'), "
+                                   "('d3', 'not in u')) s(doc_id, abstract)", "abstract", words=2)
+    got = dict(c.execute("SELECT doc_id, v FROM ta").fetchall())
+    SG.close(c)
+    ok.append(check(dup == 1 and got == {"d1": "a longer", "d2": "one two"},
+                    "texts to parse: one per document (the longest), cut to the first words, without sorting whole abstracts"))
+
     if have_nlp:
         inc = read("patent_occ_incidence")
         hit = inc[inc.doc_id == "10000001"]

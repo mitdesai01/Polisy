@@ -219,24 +219,40 @@ def _abstracts(c):
     return out
 
 
+def _one_per_doc(c, name, src, col, words=None):
+    """Table `name`(doc_id, v): the text column `col` of the documents in u, one row per document and the same every run
+    (a document listed twice keeps its longest text, then the one whose md5 sorts last); with `words`, whitespace runs
+    collapsed and the text cut to its first `words` words. Only short keys are compared: sorting whole abstracts per
+    document needs more memory than Colab has, and that kind of sort cannot spill to disk."""
+    v = f"s.{col}"
+    if words:
+        v = f"array_to_string(list_slice(string_split(regexp_replace({v}, '\\s+', ' ', 'g'), ' '), 1, {words}), ' ')"
+    c.execute(f"CREATE OR REPLACE TABLE {name} AS SELECT s.doc_id, {v} AS v FROM ({src}) s "
+              f"WHERE s.{col} IS NOT NULL AND s.doc_id IN (SELECT doc_id FROM u)")
+    dup = pc.q1(c, f"SELECT count(*) - count(DISTINCT doc_id) FROM {name}")
+    if dup:
+        c.execute(f"CREATE OR REPLACE TABLE {name} AS SELECT doc_id, arg_max(v, lpad(CAST(length(v) AS VARCHAR), 9, '0') || md5(v)) AS v "
+                  f"FROM {name} GROUP BY 1")
+    return dup
+
+
 def _texts(c):
-    """Table tx(doc_id, text) for the AI inventions in u."""
+    """Table tx(doc_id, text) for the AI inventions in u: the title, then the abstract's first webb_abstract_words words."""
     mode = LAB["SETTINGS"].get("webb_text", "title+abstract")
     words = int(LAB["SETTINGS"].get("webb_abstract_words", 60))
     titles = [f"SELECT patent_id AS doc_id, title FROM read_parquet('{pc.sqlp(sg.staged_path('patentsview', 'g_patent'))}')"]
     pgp = sg.staged_path("patentsview_pregrant", "pg_published_application")
     if pgp.exists():
         titles.append(f"SELECT pgpub_id AS doc_id, title FROM read_parquet('{pc.sqlp(pgp)}')")
-    c.execute("CREATE OR REPLACE VIEW ti AS " + " UNION ALL ".join(titles))
+    _one_per_doc(c, "tt", " UNION ALL ".join(titles), "title")
     ab = _abstracts(c) if "abstract" in mode else None
     if "abstract" in mode and ab is None:
         log("tasks: no abstract tables (g_patent_abstract, pg_published_application_abstract), so titles only")
-    abs_sql = (f"coalesce(' ' || array_to_string(list_slice(string_split(regexp_replace(a.abstract, '\\s+', ' ', 'g'), ' '), 1, {words}), ' '), '')"
-               if ab is not None else "''")
+    if ab is not None:
+        _one_per_doc(c, "ta", f"SELECT doc_id, abstract FROM read_parquet('{pc.sqlp(ab)}')", "abstract", words)
     c.execute(f"""CREATE OR REPLACE TABLE tx AS
-        SELECT u.doc_id, trim(coalesce(t.title, '') || '.' || {abs_sql}) AS text
-        FROM u LEFT JOIN (SELECT doc_id, first(title ORDER BY length(title) DESC, title) AS title FROM ti GROUP BY 1) t USING (doc_id)
-        {f"LEFT JOIN (SELECT doc_id, first(abstract ORDER BY length(abstract) DESC, abstract) AS abstract FROM read_parquet('{pc.sqlp(ab)}') GROUP BY 1) a USING (doc_id)" if ab is not None else ""}""")
+        SELECT u.doc_id, trim(coalesce(t.v, '') || '.' || {"coalesce(' ' || a.v, '')" if ab is not None else "''"}) AS text
+        FROM u LEFT JOIN tt t USING (doc_id) {"LEFT JOIN ta a USING (doc_id)" if ab is not None else ""}""")
     return f"{mode.replace('+', '_')}{words if ab is not None else ''}"
 
 
@@ -247,19 +263,21 @@ def _parse_cached(c, nlp, tag, chunk=20000):
     cache = sg.staged_path("tasks", "x").parent / f"pairs_{tag}_{model}"
     cache.mkdir(parents=True, exist_ok=True)
     have = list(cache.glob("part_*.parquet"))
-    if have:
+    if have:                                   # the documents still to parse, numbered in doc_id order (ids only:
         c.execute(f"CREATE OR REPLACE VIEW cache AS SELECT * FROM read_parquet('{pc.sqlp(cache)}/part_*.parquet')")
-        todo = pc.q(c, "SELECT doc_id, text FROM tx WHERE doc_id NOT IN (SELECT DISTINCT doc_id FROM cache) ORDER BY doc_id")
+        left = "WHERE doc_id NOT IN (SELECT DISTINCT doc_id FROM cache)"     # the texts are fetched a chunk at a time)
     else:
-        todo = pc.q(c, "SELECT doc_id, text FROM tx ORDER BY doc_id")
-    n0 = len(todo)
+        left = ""
+    c.execute(f"CREATE OR REPLACE TABLE todo AS SELECT doc_id, row_number() OVER (ORDER BY doc_id) AS rn FROM tx {left}")
+    n0 = pc.q1(c, "SELECT count(*) FROM todo")
     if n0:
         log(f"tasks: parsing {n0:,} texts ({len(have)} earlier chunks cached; about {n0 / 150 / 60:.0f} minutes at 150 texts a second)")
     k = len(have)
     t0 = time.time()
     procs = int(LAB["SETTINGS"].get("webb_processes", 1))
     for i in range(0, n0, chunk):
-        part = todo.iloc[i:i + chunk]
+        part = pc.q(c, f"SELECT t.doc_id, x.text FROM todo t JOIN tx x USING (doc_id) WHERE t.rn > {i} AND t.rn <= {i + chunk} "
+                       "ORDER BY t.rn")
         got = parse(part.text.fillna("").tolist(), nlp, n_process=procs)
         rows = [(d, v, o) for d, ps in zip(part.doc_id, got) for v, o in (ps or {(None, None)})]
         pd.DataFrame(rows, columns=["doc_id", "verb", "obj"]).to_parquet(cache / f"part_{k:05d}.parquet", index=False)
