@@ -224,6 +224,12 @@ def main():
     from polisy_lab import link
     extra = link._occupation_extras(pd.DataFrame({"soc": ["15-1252", "29-1216", None], "workers": [10.0, 5.0, 1.0]}))
     ok.append(check(extra.acs_workers.iloc[0] == 150 and extra.soc_key.isna().iloc[2], "occupation panel gets the ACS profile"))
+    from polisy_lab.core import RESULTS as R
+    link._webb_check(pd.DataFrame({"soc_key": [f"11-{i:04d}" for i in range(12)], "webb_ai_invention": [i * 0.1 for i in range(12)],
+                                   "webb19_ai_score": [i * 2.0 for i in range(12)]}))
+    wc = [x for x in R["diagnostics"] if x["step"] == "Webb rebuild vs Webb's published AI score"]
+    ok.append(check(wc and wc[0]["note"] == "rank correlation r = 1.00" and wc[0]["matched"] == 12,
+                    "the rebuilt Webb measure is checked against Webb's published score (rank correlation)"))
     old = link._occupation_extras(pd.DataFrame({"soc": ["15-1132"], "soc2018": ["15-1252"], "workers": [1.0]}))
     ok.append(check(old.acs_workers.iloc[0] == 150, "a code the ACS lacks (SOC 2010) falls back to its SOC 2018 link"))
 

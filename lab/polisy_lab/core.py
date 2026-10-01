@@ -29,7 +29,7 @@ for _cand in (_HERE.parent.parent / "POLISY_DA", _HERE.parent, Path("/content/po
         sys.path.insert(0, str(_cand))
 import polisy_core as pc  # noqa: E402
 
-__version__ = "0.3.7 (2026-10-01) patent, firm, IPUMS and task layers; DISCERN 2.0 as published"
+__version__ = "0.3.8 (2026-10-01) patent, firm, IPUMS and task layers; DISCERN 2.0 as published"
 
 # --------------------------------------------------------------------------- config
 LAB_ROOT = Path(os.environ.get("POLISY_LAB_ROOT", pc.ROOT / "lab"))

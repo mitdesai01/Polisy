@@ -271,11 +271,15 @@ In the Colab notebook (`lab/notebooks/POLISY_AI_Innovation_Lab.ipynb`), after st
 | 4b | `GET_PATENT_DATA = True`, `PV_TABLES` | downloads PatentsView's tables (sets "core", "pregrant", "text", "citations"), the AIPD file and O*NET into `POLISY/data` | once; depends on the connection |
 | 4c | `GET_IPUMS = True` | orders the IPUMS extract with your API key (Colab secret `IPUMS_API_KEY`), waits, saves it | once; IPUMS takes minutes to an hour |
 | 6b | `RUN_PATENT_LAYER = True` | the patent layer, the firm link and the firm panels | tens of minutes the first time (staging), minutes after |
-| 6c | `RUN_TASK_MATCHING = True` | the task matching | an hour or more the first time (parsing); cached and resumable |
+| 6c | `RUN_TASK_MATCHING = True` | the task matching | about 3 hours the first time (1.9 million texts at about 190 a second on Colab); cached and resumable |
+| 6d | (none) | a first look: the 15 occupations AI invention targets most since 2022, with their partisanship, and the rebuilt Webb measure's rank correlation with Webb's published AI score and with AIOE | seconds |
 
 Steps 6b and 6c print what to check: the number of utility patents and the share with a filing year, AIPD coverage,
 which DISCERN file was read as what (lines starting `discern:`) and the share of DISCERN's patents given a `gvkey`,
-how often DISCERN's two files disagree on the owner, the name match's out-of-sample agreement with DISCERN, the share of company-assigned patents linked to a firm, and the
+how often DISCERN's two files disagree on the owner, the name match's out-of-sample agreement with DISCERN, the
+rebuilt Webb measure's rank correlation with Webb's published AI score (clearly positive is expected, not 1: Webb scored
+patent titles to 2019 with a keyword definition of AI, the rebuild reads titles and abstracts to 2024 with the AI
+Patent Dataset's label), the share of company-assigned patents linked to a firm, and the
 share of AI inventions matched to at least one occupation. The diagnostics table (step 6) has every link's coverage.
 
 Settings the team may want to change are in `LAB["SETTINGS"]` (`polisy_lab/core.py`): `ai_label`, `aipd_threshold`,

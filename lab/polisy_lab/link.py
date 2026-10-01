@@ -185,6 +185,7 @@ def _occupation_extras(p):
             p[name + "_pct"] = p.soc_key.map(w.percentile)
         diagnostic("VRscores occupations -> AI invention (Webb)", "panel_occupation", "occ_ai_invention", "SOC 2018 code",
                    p.loc[p.webb_ai_invention.notna(), "workers"].sum(), p.workers.sum(), "matched workers")
+        _webb_check(p)
     iy = read("occ_ai_incidence_year")
     if iy is not None and len(iy):
         last = int(iy.year.max())
@@ -193,6 +194,27 @@ def _occupation_extras(p):
         for col in ("ai_incidence_total", "ai_incidence_5y"):
             p[col] = p[col].fillna(0).where(p.soc_key.notna())
     return p
+
+
+def _webb_check(p):
+    """The rebuilt Webb measure against Webb's own published AI score (from the DAIOE SOC 2018 panel) and against AIOE:
+    rank correlations across occupations, each counted once. Webb scored patent titles to 2019 with a keyword
+    definition of AI; the rebuild reads titles and abstracts to 2024 with the AI Patent Dataset's label, so a clearly
+    positive correlation, not an exact one, is what to expect."""
+    d = p.drop_duplicates("soc_key") if "soc_key" in p else p
+    out = []
+    for other, label in (("webb19_ai_score", "Webb's published AI score"), ("aioe", "AIOE")):
+        if other in d and d[other].notna().any():
+            both = d[["webb_ai_invention", other]].dropna()
+            if len(both) >= 10:
+                r = both.corr(method="spearman").iloc[0, 1]
+                out.append((label, r, len(both)))
+    if not out:
+        return
+    log("AI invention (Webb, rebuilt): rank correlation " + "; ".join(f"with {lab} {r:.2f} ({n:,} occupations)" for lab, r, n in out))
+    lab, r, n = out[0]
+    diagnostic(f"Webb rebuild vs {lab}", "occ_ai_invention", lab, "SOC code", n, d.webb_ai_invention.notna().sum(), "occupations",
+               note=f"rank correlation r = {r:.2f}")
 
 
 MEASURES_2018 = ["frs21_aioe", "open24_human_E1", "open24_human_E1_E2", "open24_gpt_automation", "webb19_ai_score",

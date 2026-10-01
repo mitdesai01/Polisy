@@ -212,6 +212,27 @@ else:
     print("Step 6c is off: set RUN_TASK_MATCHING = True above and run this cell (after step 6b)")
 
 # %%
+# 6d. A first look at step 6c: the 15 occupations whose tasks AI inventions target most since 2022, with how their
+#     workers lean (rep_share, VRscores), and how the rebuilt Webb measure compares with Webb's own published AI score
+#     and with AIOE (rank correlations across occupations; clearly positive is what to expect, not 1). Needs steps 1, 2
+#     and a finished 6c; reads the saved panel, so it takes seconds.
+import pandas as pd
+p = pd.read_parquet(LAB["PANELS"] / "panel_occupation.parquet")
+if "webb_ai_invention" in p:
+    names = pd.read_parquet(LAB["CANONICAL"] / "onet_tasks.parquet", columns=["soc", "title"]).drop_duplicates("soc")
+    p["occupation"] = p.soc_key.map(names.set_index("soc").title)
+    show = [x for x in ("occupation", "soc_key", "workers", "rep_share", "webb_ai_invention_pct", "webb_ai_invention_recent_pct",
+                        "ai_incidence_5y") if x in p]
+    one = p.sort_values("workers", ascending=False).drop_duplicates("soc_key")
+    display(one.sort_values("webb_ai_invention_recent", ascending=False)[show].head(15).round(3))
+    for other, label in (("webb19_ai_score", "Webb's published AI score"), ("aioe", "AIOE (Felten et al.)")):
+        if other in one:
+            both = one[["webb_ai_invention", other]].dropna()
+            print(f"rank correlation with {label}: {both.corr(method='spearman').iloc[0, 1]:.2f} ({len(both)} occupations)")
+else:
+    print("Step 6c has not finished yet: its measure is not in the occupation panel")
+
+# %%
 # 7. Analyses: findings, graded, in the lab's reading order
 run_all(stages=("analyze",), fetch=False)
 findings = pd.read_csv(LAB["RESULTS"] / "findings.csv").sort_values("rank")

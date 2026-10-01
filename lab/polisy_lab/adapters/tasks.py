@@ -331,14 +331,14 @@ def adapt_patent_tasks():
                        UNION ALL SELECT 'all', verb, obj, count(DISTINCT doc_id) FROM dp GROUP BY 2, 3)
             SELECT x.period, x.verb, x.obj, x.docs, x.docs / n.n AS share FROM x JOIN docs_p n USING (period)""")
         _copy(c, "SELECT * FROM wp WHERE docs >= 2 ORDER BY period, share DESC", "webb_pairs")
-        _copy(c, """WITH te AS (SELECT w.period, tp.task_id, sum(w.share) AS exposure FROM tp JOIN wp w USING (verb, obj) GROUP BY 1, 2),
+        c.execute("""CREATE OR REPLACE TABLE oai AS
+                    WITH te AS (SELECT w.period, tp.task_id, sum(w.share) AS exposure FROM tp JOIN wp w USING (verb, obj) GROUP BY 1, 2),
                          per AS (SELECT DISTINCT period FROM wp),
-                         grid AS (SELECT per.period, tk.* FROM per CROSS JOIN tk)
-                    SELECT g.soc, g.period, sum(g.importance * coalesce(te.exposure, 0)) / sum(g.importance) AS exposure,
-                           count(*) AS tasks, count(te.task_id) AS tasks_matched
-                    FROM grid g LEFT JOIN te USING (period, task_id) GROUP BY 1, 2""", "occ_ai_invention")
-        c.execute(f"""CREATE OR REPLACE TABLE oai AS SELECT *, percent_rank() OVER (PARTITION BY period ORDER BY exposure) AS percentile
-                      FROM read_parquet('{pc.sqlp(canon('occ_ai_invention'))}')""")
+                         grid AS (SELECT per.period, tk.* FROM per CROSS JOIN tk),
+                         e AS (SELECT g.soc, g.period, sum(g.importance * coalesce(te.exposure, 0)) / sum(g.importance) AS exposure,
+                                      count(*) AS tasks, count(te.task_id) AS tasks_matched
+                               FROM grid g LEFT JOIN te USING (period, task_id) GROUP BY 1, 2)
+                    SELECT *, percent_rank() OVER (PARTITION BY period ORDER BY exposure, soc) AS percentile FROM e""")
         _copy(c, "SELECT * FROM oai ORDER BY period, soc", "occ_ai_invention")
         # 4. incidence through pairs specific to few occupations
         share = float(LAB["SETTINGS"].get("webb_generic_share", 0.05))
