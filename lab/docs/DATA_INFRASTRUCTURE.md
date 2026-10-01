@@ -291,6 +291,9 @@ variables the state panel uses, by name; the canonical `cspp_catalog` lists them
   its log lines are the first real check.
 - **Fractional counts.** A patent with inventors in two counties counts half in each; one owned by two firms counts
   half for each.
+- **The same tables every run.** Where the inputs tie (two gvkeys for one DISCERN firm-year, a location or an assignee
+  listed twice, a document twice in the AI Patent Dataset), a fixed rule settles it: the better source, then the more
+  frequent, then the smaller code. Every run on the same files gives the same tables.
 - **The name match is a fallback.** It misses subsidiaries whose names differ from the parent's (DISCERN's name lists
   help) and can link a patent to a firm that merely shares a name. Its agreement with DISCERN, measured out of sample
   at every run (names as known three years before DISCERN ends, scored on those three years), says how far to trust

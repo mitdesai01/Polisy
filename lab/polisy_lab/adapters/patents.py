@@ -212,7 +212,8 @@ def adapt_aipd():
                  + "".join(f", {cond} AS aipd_{p}" for p, cond in part.items())
                  + ", src_rank FROM aipd_raw WHERE regexp_extract(doc_id, '(\\d+)', 1) <> ''")
         _copy(c, f"SELECT * EXCLUDE (src_rank) FROM ({inner}) "
-                 "QUALIFY row_number() OVER (PARTITION BY doc_id, is_patent ORDER BY src_rank, ai DESC) = 1", "aipd")
+                 "QUALIFY row_number() OVER (PARTITION BY doc_id, is_patent ORDER BY src_rank, ai DESC NULLS LAST, "
+                 "ai_strict DESC NULLS LAST) = 1", "aipd")
         n, npat, nai = c.execute(f"SELECT count(*), sum(is_patent::INT), sum(ai::INT) FROM read_parquet('{pc.sqlp(canon('aipd'))}')").fetchone()
         log(f"aipd: AI label = {how}; {npat:,} patents and {n - npat:,} published applications, {nai / max(n, 1):.1%} AI"
             + (f" (from {len(staged)} files)" if len(staged) > 1 else ""))
@@ -244,7 +245,7 @@ def _cpc_table(c, key):
         WITH x AS (SELECT {key} AS id, seq, {code} AS c, split_part({code}, '/', 1) AS g,
                           coalesce(nullif(upper(trim(subclass)), ''), substr({code}, 1, 4)) AS s FROM cpc)
         SELECT id, {subs}, {flags}, count(*) AS n_cpc, count(DISTINCT s) AS n_subclasses,
-               arg_min(s, coalesce(seq, 999999)) AS main_subclass
+               first(s ORDER BY coalesce(seq, 999999), s) AS main_subclass
         FROM x GROUP BY 1""")
 
 
@@ -265,21 +266,23 @@ def _loc_table(c, views):
                CASE WHEN {raw} = '' THEN NULL WHEN length({raw}) <= 3 AND state_fips IS NOT NULL THEN state_fips || lpad({raw}, 3, '0')
                     ELSE lpad({raw}, 5, '0') END AS county_fips, lat, lon, us
         FROM ({' UNION ALL '.join(parts)})
-        QUALIFY row_number() OVER (PARTITION BY location_id ORDER BY state_fips NULLS LAST) = 1""")
+        QUALIFY row_number() OVER (PARTITION BY location_id ORDER BY state_fips NULLS LAST, county_fips NULLS LAST,
+                                   lat NULLS LAST, lon NULLS LAST, us DESC) = 1""")
 
 
 def _inventor_table(c, key):
     c.execute(f"""CREATE OR REPLACE TABLE invs AS
         SELECT i.{key} AS id, count(*) AS n_inventors, count(*) FILTER (WHERE l.us) AS n_us_inventors,
-               arg_min(l.state_fips, coalesce(i.seq, 999999)) AS first_inventor_state
+               first(l.state_fips ORDER BY coalesce(i.seq, 999999), l.state_fips NULLS LAST) AS first_inventor_state
         FROM inv i LEFT JOIN loc l USING (location_id) GROUP BY 1""")
 
 
 def _assignee_table(c, key):
     c.execute(f"""CREATE OR REPLACE TABLE asg AS
-        SELECT {key} AS id, arg_min(assignee_id, coalesce(seq, 999999)) AS assignee_id,
-               arg_min(org, coalesce(seq, 999999)) AS assignee_org,
-               arg_min(try_cast(try_cast(atype AS DOUBLE) AS INTEGER) % 10, coalesce(seq, 999999)) AS assignee_type,
+        SELECT {key} AS id, first(assignee_id ORDER BY coalesce(seq, 999999), assignee_id, org) AS assignee_id,
+               first(org ORDER BY coalesce(seq, 999999), assignee_id, org) AS assignee_org,
+               first(try_cast(try_cast(atype AS DOUBLE) AS INTEGER) % 10 ORDER BY coalesce(seq, 999999), assignee_id, org)
+                   AS assignee_type,
                count(*) AS n_assignees
         FROM asg_raw GROUP BY 1""")
 
@@ -374,7 +377,8 @@ def _places(c):
                1.0 / k.n AS share, p.ai, p.ai_broad, p.ai_aipd, p.climate
         FROM inv i JOIN pats p USING (patent_id) JOIN k USING (patent_id) JOIN loc l USING (location_id)
         WHERE l.us AND l.state_fips IS NOT NULL
-        QUALIFY row_number() OVER (PARTITION BY i.patent_id, i.inventor_id ORDER BY i.seq) = 1""")
+        QUALIFY row_number() OVER (PARTITION BY i.patent_id, i.inventor_id
+                                   ORDER BY i.seq, l.state_fips, l.county_fips NULLS LAST, l.lat NULLS LAST, l.lon NULLS LAST) = 1""")
     m = c.execute("SELECT count(*), count(DISTINCT patent_id), sum(CASE WHEN county_fips IS NULL THEN 1 ELSE 0 END) FROM places").fetchone()
     log(f"patentsview: {m[0]:,} US inventor-patent rows on {m[1]:,} patents; {m[2]:,} without a county")
     _copy(c, "SELECT * FROM places", "patent_places")
@@ -396,7 +400,7 @@ def _edges_and_moves(c):
                                   WHEN x.year < 2020 THEN '2015-2019' ELSE '2020 on' END AS period
                            FROM a x JOIN a y ON x.patent_id = y.patent_id AND x.s < y.s)
                 SELECT a, b, period, count(*) AS weight FROM e GROUP BY 1, 2, 3 HAVING count(*) >= 5""", "ai_cpc_edges")
-    _copy(c, """WITH s AS (SELECT inventor_id, patent_id, year, any_value(state_fips) AS state_fips, bool_or(ai_broad) AS ai
+    _copy(c, """WITH s AS (SELECT inventor_id, patent_id, year, min(state_fips) AS state_fips, bool_or(ai_broad) AS ai
                            FROM places GROUP BY 1, 2, 3),
                      o AS (SELECT *, lag(state_fips) OVER (PARTITION BY inventor_id ORDER BY year, patent_id) AS prev FROM s)
                 SELECT prev AS origin, state_fips AS dest, year, ai, count(*) AS moves FROM o
@@ -426,7 +430,7 @@ def adapt_pregrant():
         has_app = pc.q1(c, "SELECT count(application_id) FROM pa") if "application_id" in cols else 0
         if not has_app and "crosswalk" in st:
             c.execute("CREATE OR REPLACE VIEW pa2 AS SELECT a.* EXCLUDE (application_id), x.application_id FROM pa a "
-                      "LEFT JOIN (SELECT pgpub_id, any_value(application_id) AS application_id FROM xw GROUP BY 1) x USING (pgpub_id)")
+                      "LEFT JOIN (SELECT pgpub_id, min(application_id) AS application_id FROM xw GROUP BY 1) x USING (pgpub_id)")
         else:
             c.execute("CREATE OR REPLACE VIEW pa2 AS SELECT * FROM pa")
         c.execute(f"""CREATE OR REPLACE TABLE pub AS
@@ -479,7 +483,7 @@ def adapt_pregrant():
                        p.ai, p.ai_broad, p.ai_aipd, p.climate, p.granted_patent_id IS NOT NULL AS granted
                 FROM inv i JOIN pubs p USING (pgpub_id) JOIN k USING (pgpub_id) JOIN loc l USING (location_id)
                 WHERE l.us AND l.state_fips IS NOT NULL
-                QUALIFY row_number() OVER (PARTITION BY i.pgpub_id, i.inventor_id ORDER BY i.seq) = 1""")
+                QUALIFY row_number() OVER (PARTITION BY i.pgpub_id, i.inventor_id ORDER BY i.seq, l.state_fips, l.county_fips NULLS LAST) = 1""")
             _copy(c, "SELECT * FROM aplaces", "application_places")
         return True
     finally:

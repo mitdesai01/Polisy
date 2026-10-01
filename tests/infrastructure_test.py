@@ -116,12 +116,13 @@ def main():
                            "10000009": {"160329", "100003"}, "10000005": {"100002"}},
                     "DISCERN: owners from permno_adj (stored as 90319.0) by year, at grant and at filing; an ungranted application left out"))
     fy = read("discern_firm_year").set_index(["gvkey", "year"])
-    ok.append(check(sorted(fy.index) == [("006066", 2020), ("160329", 2019)] and fy.n_patents[("006066", 2020)] == "9000",
-                    "DISCERN's firm panel keyed by permno_adj gets its gvkey"))
+    ok.append(check(sorted(fy.index) == [("006066", 2020), ("100009", 2000), ("160329", 2019)] and fy.n_patents[("006066", 2020)] == "9000",
+                    "DISCERN's firm panel, as delivered"))
     dn = pd.read_parquet(Path(LAB["STAGED"]) / "discern" / "names.parquet").set_index(["gvkey", "name"])
     ok.append(check(tuple(dn.loc[("100001", "HECKLER & KOCH GMBH")]) == (1991, 2014) and tuple(dn.loc[("100002", "HECKLER & KOCH GMBH")]) == (2015, 2021)
-                    and tuple(dn.loc[("160329", "ALPHABET INC")]) == (2015, 2021),
-                    "DISCERN names: every owner spell, its years from a count (sub names) or a last year (owner names)"))
+                    and tuple(dn.loc[("160329", "ALPHABET INC")]) == (2015, 2021) and ("100009", "HECKLER & KOCH GMBH") not in dn.index,
+                    "DISCERN names: every owner spell, its years from a count (sub names) or a last year (owner names); "
+                    "a permno_adj two files give different gvkeys settles the same way every run"))
     ag = read("assignee_gvkey").set_index("assignee_id")
     ok.append(check(ag.gvkey.get("as-ibm") == "006066" and ag.gvkey.get("as-goog") == "160329" and "as-oai" not in ag.index
                     and ag.gvkey.get("as-hk") == "100002",

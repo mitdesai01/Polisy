@@ -235,8 +235,8 @@ def _texts(c):
                if ab is not None else "''")
     c.execute(f"""CREATE OR REPLACE TABLE tx AS
         SELECT u.doc_id, trim(coalesce(t.title, '') || '.' || {abs_sql}) AS text
-        FROM u LEFT JOIN (SELECT doc_id, any_value(title) AS title FROM ti GROUP BY 1) t USING (doc_id)
-        {f"LEFT JOIN (SELECT doc_id, any_value(abstract) AS abstract FROM read_parquet('{pc.sqlp(ab)}') GROUP BY 1) a USING (doc_id)" if ab is not None else ""}""")
+        FROM u LEFT JOIN (SELECT doc_id, first(title ORDER BY length(title) DESC, title) AS title FROM ti GROUP BY 1) t USING (doc_id)
+        {f"LEFT JOIN (SELECT doc_id, first(abstract ORDER BY length(abstract) DESC, abstract) AS abstract FROM read_parquet('{pc.sqlp(ab)}') GROUP BY 1) a USING (doc_id)" if ab is not None else ""}""")
     return f"{mode.replace('+', '_')}{words if ab is not None else ''}"
 
 

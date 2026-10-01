@@ -166,8 +166,9 @@ def build_firms(D):
     pd.DataFrame({"id_name": [31, 32], "sample": ["compustat", "compustat"], "name_std": ["ALPHABET INC", "IBM"],
                   "fyear1": [2015, 1980], "nyear1": [2021, 2021], "permno_adj1": [90319, 12490], "name_acq1": [None, None]}
                  ).to_csv(d / "discern_uo_names.csv", index=False)
-    pd.DataFrame({"permno_adj": [90319, 12490], "gvkey": [160329, 6066], "fyear": [2019, 2020], "n_patents": [3000, 9000],
-                  "n_pubs": [100, 200]}).to_csv(d / "discern_firm_panel_1980_2021.csv", index=False)
+    # a tie: the panel says permno_adj 77777 was gvkey 100009 in 2000, the permno-gvkey file says 100001 (the smaller wins)
+    pd.DataFrame({"permno_adj": [90319, 12490, 77777], "gvkey": [160329, 6066, 100009], "fyear": [2019, 2020, 2000],
+                  "n_patents": [3000, 9000, 5], "n_pubs": [100, 200, 0]}).to_csv(d / "discern_firm_panel_1980_2021.csv", index=False)
     pd.DataFrame({"permno_adj": [90319, 12490, 12490, 77777, 88888, 55555, 11111],
                   "gvkey": ["160329", "006066", "006066", "100001", "100002", "100003", "002993"],
                   "fyear": [2019, 2020, 1996, 2000, 2019, 2016, 1977]}).to_stata(d / "permno_gvkey.dta", write_index=False)

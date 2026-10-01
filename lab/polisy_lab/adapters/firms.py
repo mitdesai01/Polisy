@@ -273,12 +273,12 @@ def adapt_discern():
         comp = _compustat_permnos(c)
         pairs += [comp] if comp else []
         c.execute("CREATE OR REPLACE TABLE pg AS " + (
-            f"""SELECT permno, year, arg_min(gvkey, pri * 1e12 - n) AS gvkey, min(pri) AS pri
+            f"""SELECT permno, year, first(gvkey ORDER BY pri, n DESC, gvkey) AS gvkey, min(pri) AS pri
                 FROM (SELECT permno, gvkey, year, min(pri) AS pri, count(*) AS n FROM ({' UNION ALL '.join(pairs)})
                       WHERE permno IS NOT NULL AND gvkey IS NOT NULL GROUP BY permno, gvkey, year)
                 GROUP BY permno, year""" if pairs else
             "SELECT NULL::VARCHAR AS permno, NULL::INTEGER AS year, NULL::VARCHAR AS gvkey, 0 AS pri WHERE FALSE"))
-        c.execute("""CREATE OR REPLACE TABLE pg1 AS SELECT permno, arg_min(gvkey, pri * 1e12 - n) AS gvkey
+        c.execute("""CREATE OR REPLACE TABLE pg1 AS SELECT permno, first(gvkey ORDER BY pri, n DESC, gvkey) AS gvkey
                      FROM (SELECT permno, gvkey, min(pri) AS pri, count(*) AS n FROM pg GROUP BY 1, 2) GROUP BY 1""")
         by = dict(c.execute("SELECT pri, count(*) FROM (SELECT permno, min(pri) AS pri FROM pg GROUP BY 1) GROUP BY 1").fetchall())
         log("discern: permno_adj -> gvkey for " + (f"{_n(sum(by.values()), 'firm')}: " + ", ".join(
@@ -334,10 +334,11 @@ def adapt_discern():
             _, _, r = tables["panel"][0]
             gv, joins = firm_of("t", r)
             drop = ", ".join(_q(x) for x in (r["year"], r["gvkey"]) if x)
+            order = f"ORDER BY {_pn(_q(r['permno']))}" if r["permno"] else ""
             _copy(c, f"""SELECT * FROM (SELECT {gv} AS gvkey, {_int('t.' + _q(r['year']))} AS year,
                                                t.* EXCLUDE ({drop}) FROM d_panel_0 t{joins})
                          WHERE gvkey IS NOT NULL AND year IS NOT NULL
-                         QUALIFY row_number() OVER (PARTITION BY gvkey, year) = 1""", "discern_firm_year")
+                         QUALIFY row_number() OVER (PARTITION BY gvkey, year {order}) = 1""", "discern_firm_year")
         parts = []                                     # names for the assignee name match, with the years each firm held them
         for i, (_, _, r) in enumerate(tables["patents"]):
             if r["name"]:                              # the assignee names on the patents DISCERN gives each firm
@@ -413,8 +414,14 @@ def _assignees():
                              FROM read_parquet('{pc.sqlp(p)}') a JOIN read_parquet('{pc.sqlp(canon('applications'))}') p USING (pgpub_id)""")
         if not parts:
             return None
-        return pc.q(c, f"""SELECT assignee_id, mode(org) AS org, mode(atype) AS atype, count(*) AS docs, min(y) AS y0, max(y) AS y1
-                           FROM ({' UNION ALL '.join(parts)}) WHERE org IS NOT NULL AND org <> '' GROUP BY 1""")
+        return pc.q(c, f"""WITH x AS (SELECT * FROM ({' UNION ALL '.join(parts)}) WHERE org IS NOT NULL AND org <> ''),
+                                o AS (SELECT assignee_id, first(org ORDER BY k DESC, org) AS org
+                                      FROM (SELECT assignee_id, org, count(*) AS k FROM x GROUP BY 1, 2) GROUP BY 1),
+                                t AS (SELECT assignee_id, first(atype ORDER BY k DESC, atype NULLS LAST) AS atype
+                                      FROM (SELECT assignee_id, atype, count(*) AS k FROM x GROUP BY 1, 2) GROUP BY 1)
+                           SELECT x.assignee_id, any_value(o.org) AS org, any_value(t.atype) AS atype, count(*) AS docs,
+                                  min(x.y) AS y0, max(x.y) AS y1
+                           FROM x JOIN o USING (assignee_id) JOIN t USING (assignee_id) GROUP BY 1 ORDER BY 1""")
     finally:
         sg.close(c)
 
@@ -480,7 +487,9 @@ def _match(firms, a):
     except ImportError:
         log("firm names: pip install rapidfuzz for fuzzy name matches (exact matches only for now)")
     m = pd.DataFrame(rows, columns=["assignee_id", "assignee_org", "name_norm", "gvkey", "method", "score", "ambiguous", "docs"])
-    name = firms.drop_duplicates("gvkey").set_index("gvkey").name
+    name = (firms.assign(c=firms.source.eq("compustat")).sort_values(["gvkey", "c", "fy1", "name"], ascending=[True, False, False, True],
+                                                                       na_position="last")
+            .drop_duplicates("gvkey").set_index("gvkey").name)
     m["firm_name"] = m.gvkey.map(name)
     return m
 
