@@ -177,7 +177,10 @@ pd.DataFrame(json.loads((LAB["RESULTS"] / "results.json").read_text())["diagnost
 #     exploration, search depth and scope. The first run stages the big tables as Parquet (tens of minutes); later
 #     runs reuse them. Check the lines "patentsview: ... utility patents", "patent_firm: ... linked" and the agreement
 #     between DISCERN and the name match. The firm panels are in POLISY/lab/panels and, as CSV and Stata files, in
-#     POLISY/lab/results/tables (firm_patents_year, panel_firm_year).
+#     POLISY/lab/results/tables (firm_patents_year, panel_firm_year). Needs only steps 1 and 2 before it: the other
+#     steps' tables, once built, are kept in POLISY/lab and used as they are.
+import json
+import pandas as pd
 RUN_PATENT_LAYER = False
 if RUN_PATENT_LAYER:
     run_all(stages=("adapt", "link"), fetch=False, adapters=PATENT_LAYER)
